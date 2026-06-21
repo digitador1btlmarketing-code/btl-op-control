@@ -17,6 +17,7 @@ Route::middleware('access:ventas,admin')->group(function () {
 
 Route::middleware('access:admin')->group(function () {
     Route::get('/op/admin', [OrdenProduccionController::class, 'admin'])->name('op.admin');
+    Route::get('/op/admin/updates', [OrdenProduccionController::class, 'adminUpdates'])->name('op.admin.updates');
     Route::post('/op/admin/update/{id}', [OrdenProduccionController::class, 'updateQuick'])->name('op.update');
 });
 

@@ -173,4 +173,51 @@ class OrdenProduccionTest extends TestCase
         $this->assertEquals('En proceso', $op->estado);
         $this->assertEquals(50, $op->avance);
     }
+
+    /**
+     * Test default model state and progress calculations when created without them.
+     */
+    public function test_default_state_and_progress_on_creation(): void
+    {
+        $op = OrdenProduccion::create([
+            'categoria' => 'Branding',
+            'numero_op' => 'OP-TEST-DEFAULTS',
+            'proyecto' => 'Defaults Test',
+            'presupuestista' => 'Test Presupuesto',
+            'cliente' => 'Test Cliente',
+            'marca' => 'Test Marca',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '12:00:00',
+            'entregar_a' => 'Cliente',
+        ]);
+
+        $this->assertEquals('Pendiente', $op->estado);
+        $this->assertEquals(0, $op->avance);
+
+        $dbOp = OrdenProduccion::where('numero_op', 'OP-TEST-DEFAULTS')->first();
+        $this->assertEquals('Pendiente', $dbOp->estado);
+        $this->assertEquals(0, $dbOp->avance);
+    }
+
+    /**
+     * Test admin updates route.
+     */
+    public function test_admin_updates_route(): void
+    {
+        session(['user_role' => 'admin']);
+
+        $response = $this->getJson('/op/admin/updates');
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'ordenes',
+                'kpis' => [
+                    'total',
+                    'pendientes',
+                    'en_proceso',
+                    'terminadas',
+                    'urgentes',
+                ]
+            ]);
+    }
 }

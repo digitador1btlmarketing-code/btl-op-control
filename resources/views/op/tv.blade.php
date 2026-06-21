@@ -127,8 +127,9 @@
                                 <span class="badge 
                                     @if($orden->prioridad === 'URGENTE') badge-urgente
                                     @elseif($orden->prioridad === 'PRÓXIMA') badge-proxima
-                                    @else badge-normal @endif">
-                                    {{ $orden->prioridad }}
+                                    @elseif($orden->prioridad === 'NORMAL') badge-normal
+                                    @else badge-cancelado @endif">
+                                    {{ $orden->prioridad ?? 'Sin fecha' }}
                                 </span>
                             </td>
                             <td><strong style="color: var(--blue-bright);">{{ $orden->numero_op }}</strong></td>
@@ -168,8 +169,14 @@
                                     <span class="progress-text">{{ $orden->avance }}%</span>
                                 </div>
                             </td>
-                            <td style="font-weight: 700; color: {{ $orden->dias_restantes <= 0 ? 'var(--priority-urgente)' : ($orden->dias_restantes <= 2 ? 'var(--priority-proxima)' : 'var(--priority-normal)') }}">
-                                {{ $orden->dias_restantes }}d
+                            <td style="font-weight: 700; color: @if($orden->dias_restantes === null) var(--text-muted) @elseif($orden->dias_restantes <= 0) var(--priority-urgente) @elseif($orden->dias_restantes <= 2) var(--priority-proxima) @else var(--priority-normal) @endif">
+                                @if($orden->dias_restantes === null)
+                                    -
+                                @elseif($orden->dias_restantes <= 0)
+                                    Hoy
+                                @else
+                                    {{ $orden->dias_restantes }}d
+                                @endif
                             </td>
                             <td style="text-align: center;" onclick="event.stopPropagation();">
                                 @if($orden->brief)
@@ -201,7 +208,7 @@
             
             <div id="atencion-grid-vertical" class="atencion-grid-vertical">
                 @php
-                    $urgentes = $ordenes->filter(fn($o) => $o->dias_restantes < 3 && $o->estado !== 'Terminado' && $o->estado !== 'Cancelado');
+                    $urgentes = $ordenes->filter(fn($o) => $o->dias_restantes !== null && $o->dias_restantes < 3 && $o->estado !== 'Terminado' && $o->estado !== 'Cancelado');
                 @endphp
                 @forelse($urgentes as $urg)
                     <div class="atencion-card {{ $urg->prioridad === 'PRÓXIMA' ? 'proxima' : '' }}" onclick="selectOrder({{ $urg->id }})" style="cursor: pointer;">
@@ -572,9 +579,12 @@
             const y = String(dateObj.getFullYear()).substring(2);
             const creationTimeStr = `${hh}:${mm}<br><small style="font-size: 0.75rem; color: var(--text-muted);">${d}/${m}/${y}</small>`;
 
-            let priorityBadgeClass = 'badge-normal';
+            let priorityBadgeClass = 'badge-cancelado';
             if (orden.prioridad === 'URGENTE') priorityBadgeClass = 'badge-urgente';
             else if (orden.prioridad === 'PRÓXIMA') priorityBadgeClass = 'badge-proxima';
+            else if (orden.prioridad === 'NORMAL') priorityBadgeClass = 'badge-normal';
+            
+            const prioridadText = orden.prioridad || 'Sin fecha';
 
             let statusBadgeClass = 'badge-pendiente';
             if (orden.estado === 'En proceso') statusBadgeClass = 'badge-proceso';
@@ -586,13 +596,27 @@
             else if (orden.estado === 'Terminado') progressFillClass = 'progress-fill-terminado';
             else if (orden.estado === 'Cancelado') progressFillClass = 'progress-fill-cancelado';
 
-            const rawDelDate = orden.fecha_entrega.split('-');
-            const delDateStr = `${rawDelDate[2]}/${rawDelDate[1]}/${rawDelDate[0]}`;
-            const delTimeStr = orden.hora_entrega.substring(0, 5);
+            let delDateStr = '-';
+            let delTimeStr = '-';
+            if (orden.fecha_entrega) {
+                const rawDelDate = orden.fecha_entrega.split('-');
+                delDateStr = `${rawDelDate[2]}/${rawDelDate[1]}/${rawDelDate[0]}`;
+            }
+            if (orden.hora_entrega) {
+                delTimeStr = orden.hora_entrega.substring(0, 5);
+            }
 
-            let daysColor = 'var(--priority-normal)';
-            if (orden.dias_restantes <= 0) daysColor = 'var(--priority-urgente)';
-            else if (orden.dias_restantes <= 2) daysColor = 'var(--priority-proxima)';
+            let diasText = '-';
+            let daysColor = 'var(--text-muted)';
+            if (orden.dias_restantes !== null && orden.dias_restantes !== undefined) {
+                if (orden.dias_restantes <= 0) {
+                    diasText = 'Hoy';
+                    daysColor = 'var(--priority-urgente)';
+                } else {
+                    diasText = orden.dias_restantes + 'd';
+                    daysColor = orden.dias_restantes <= 2 ? 'var(--priority-proxima)' : 'var(--priority-normal)';
+                }
+            }
 
             let briefHtml = '<span style="color: var(--text-muted); font-weight: bold;">-</span>';
             if (orden.brief) {
@@ -610,7 +634,7 @@
                         </span>
                     </td>
                     <td><span style="font-weight: 600;">${creationTimeStr}</span></td>
-                    <td><span class="badge ${priorityBadgeClass}">${orden.prioridad}</span></td>
+                    <td><span class="badge ${priorityBadgeClass}">${prioridadText}</span></td>
                     <td><strong style="color: var(--blue-bright);">${orden.numero_op}</strong></td>
                     <td>${orden.marca}</td>
                     <td>${orden.presupuestista}</td>
@@ -628,7 +652,7 @@
                              <span class="progress-text">${orden.avance}%</span>
                         </div>
                     </td>
-                    <td style="font-weight: 700; color: ${daysColor};">${orden.dias_restantes}d</td>
+                    <td style="font-weight: 700; color: ${daysColor};">${diasText}</td>
                     <td style="text-align: center;" onclick="event.stopPropagation();">${briefHtml}</td>
                 </tr>
             `;
@@ -648,7 +672,7 @@
         const container = document.getElementById('atencion-grid-vertical');
         if (!container) return;
 
-        const urgentes = orders.filter(o => o.dias_restantes < 3 && o.estado !== 'Terminado' && o.estado !== 'Cancelado');
+        const urgentes = orders.filter(o => o.dias_restantes !== null && o.dias_restantes !== undefined && o.dias_restantes < 3 && o.estado !== 'Terminado' && o.estado !== 'Cancelado');
 
         if (urgentes.length === 0) {
             container.innerHTML = `
@@ -663,13 +687,15 @@
         urgentes.forEach(urg => {
             const cardClass = urg.prioridad === 'PRÓXIMA' ? 'proxima' : '';
             
-            let diasLabel = '';
-            if (urg.dias_restantes < 0) {
-                diasLabel = `VENCIDA (${Math.abs(urg.dias_restantes)}d)`;
-            } else if (urg.dias_restantes === 0) {
-                diasLabel = 'ENTREGA HOY';
-            } else {
-                diasLabel = `${urg.dias_restantes} días rest.`;
+            let diasLabel = '-';
+            if (urg.dias_restantes !== null && urg.dias_restantes !== undefined) {
+                if (urg.dias_restantes < 0) {
+                    diasLabel = `VENCIDA (${Math.abs(urg.dias_restantes)}d)`;
+                } else if (urg.dias_restantes === 0) {
+                    diasLabel = 'ENTREGA HOY';
+                } else {
+                    diasLabel = `${urg.dias_restantes} días rest.`;
+                }
             }
 
             const rawDelDate = urg.fecha_entrega.split('-');

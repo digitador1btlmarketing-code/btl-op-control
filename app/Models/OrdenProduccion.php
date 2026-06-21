@@ -30,6 +30,17 @@ class OrdenProduccion extends Model
         'avance',
     ];
 
+    protected $attributes = [
+        'estado' => 'Pendiente',
+        'avance' => 0,
+    ];
+
+    protected $appends = [
+        'dias_restantes',
+        'prioridad',
+        'mostrar_fuego',
+    ];
+
     protected static function booted()
     {
         static::saving(function ($orden) {
@@ -50,9 +61,16 @@ class OrdenProduccion extends Model
      */
     public function getDiasRestantesAttribute()
     {
-        $fechaEntrega = Carbon::parse($this->fecha_entrega)->startOfDay();
-        $hoy = Carbon::today();
-        return (int) $hoy->diffInDays($fechaEntrega, false);
+        if (!$this->fecha_entrega) {
+            return null;
+        }
+        try {
+            $fechaEntrega = Carbon::parse($this->fecha_entrega)->startOfDay();
+            $hoy = Carbon::today();
+            return (int) $hoy->diffInDays($fechaEntrega, false);
+        } catch (\Exception $e) {
+            return null;
+        }
     }
 
     /**
@@ -60,10 +78,16 @@ class OrdenProduccion extends Model
      */
     public function getPrioridadAttribute()
     {
+        if (!$this->fecha_entrega) {
+            return 'Sin fecha';
+        }
         if ($this->estado === 'Terminado' || $this->estado === 'Cancelado') {
             return 'NORMAL';
         }
         $dias = $this->dias_restantes;
+        if ($dias === null) {
+            return 'Sin fecha';
+        }
         if ($dias <= 0) {
             return 'URGENTE';
         } elseif ($dias <= 2) {
@@ -81,6 +105,10 @@ class OrdenProduccion extends Model
         if ($this->estado === 'Terminado' || $this->estado === 'Cancelado') {
             return false;
         }
-        return $this->dias_restantes < 3;
+        $dias = $this->dias_restantes;
+        if ($dias === null) {
+            return false;
+        }
+        return $dias < 3;
     }
 }

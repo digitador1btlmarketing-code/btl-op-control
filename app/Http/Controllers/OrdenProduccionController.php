@@ -187,4 +187,31 @@ class OrdenProduccionController extends Controller
             'kpis' => $kpis
         ]);
     }
+
+    /**
+     * Get real-time JSON updates for the Admin panel.
+     */
+    public function adminUpdates()
+    {
+        $ordenes = OrdenProduccion::orderBy('fecha_entrega', 'asc')
+            ->orderBy('hora_entrega', 'asc')
+            ->get();
+
+        $ordenes->each(function ($o) {
+            $o->append(['dias_restantes', 'prioridad', 'mostrar_fuego']);
+        });
+
+        $kpis = [
+            'total' => $ordenes->count(),
+            'pendientes' => $ordenes->where('estado', 'Pendiente')->count(),
+            'en_proceso' => $ordenes->where('estado', 'En proceso')->count(),
+            'terminadas' => $ordenes->where('estado', 'Terminado')->count(),
+            'urgentes' => $ordenes->filter(fn($o) => $o->prioridad === 'URGENTE')->count(),
+        ];
+
+        return response()->json([
+            'ordenes' => $ordenes,
+            'kpis' => $kpis
+        ]);
+    }
 }
