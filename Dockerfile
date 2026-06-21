@@ -24,10 +24,10 @@ RUN touch database/database.sqlite
 
 RUN php artisan key:generate --force
 
-RUN php artisan migrate --force --seed
+RUN php artisan migrate --force
 
 RUN php artisan storage:link || true
 
 EXPOSE 10000
 
-CMD php artisan serve --host=0.0.0.0 --port=${PORT}
+CMD ["sh", "/app/docker-entrypoint.sh"]
