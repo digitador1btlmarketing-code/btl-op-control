@@ -7,7 +7,7 @@
     <title>@yield('title', 'Control Center') | BTL Producción</title>
     
     <!-- Custom Style -->
-    <link rel="stylesheet" href="{{ asset('css/style.css') }}">
+    <link rel="stylesheet" href="{{ url('/css/style.css') }}?v={{ time() }}">
     
     <!-- Meta tags for auto-refresh if defined in child views -->
     @yield('meta_extra')
