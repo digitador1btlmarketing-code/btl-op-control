@@ -6,7 +6,7 @@
 <div class="login-wrapper">
     <div class="card login-card">
         <div class="logo-glass-wrapper" style="padding: 25px; width: 170px; height: 170px; margin-bottom: 25px;">
-            <img class="login-logo" src="{{ asset('img/logo-btl.png') }}" alt="BTL Marketing Logo" style="height: 120px; object-fit: contain;">
+            <img class="login-logo" src="/img/logo-btl.png" alt="BTL Marketing Logo" style="height: 120px; object-fit: contain;">
         </div>
         <h2 style="font-size: 2rem; font-weight: 800; letter-spacing: 0.5px;">BTL PRODUCCIÓN</h2>
         <h3 style="font-size: 1.15rem; color: var(--blue-bright); margin-bottom: 10px; font-weight: 700; text-transform: uppercase;">Formulario de Órdenes de Producción</h3>

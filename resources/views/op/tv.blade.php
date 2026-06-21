@@ -12,7 +12,7 @@
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
             <div style="display: flex; align-items: center; gap: 20px;">
                 <div class="logo-glass-wrapper tv-logo-wrapper" style="margin-bottom: 0;">
-                    <img class="tv-logo-img" src="{{ asset('img/logo-btl.png') }}" alt="BTL Logo">
+                    <img class="tv-logo-img" src="/img/logo-btl.png" alt="BTL Logo">
                 </div>
                 <div>
                     <h2 class="tv-title" style="margin: 0; line-height: 1;">BTL PRODUCCIÓN | <span style="color: var(--blue-bright);">BANDEJA DE TRABAJO</span></h2>
@@ -173,7 +173,7 @@
                             </td>
                             <td style="text-align: center;" onclick="event.stopPropagation();">
                                 @if($orden->brief)
-                                    <a href="{{ asset('storage/' . $orden->brief) }}" target="_blank" class="btn-view-brief">Ver Brief</a>
+                                    <a href="/storage/{{ $orden->brief }}" target="_blank" class="btn-view-brief">Ver Brief</a>
                                 @else
                                     <span style="color: var(--text-muted); font-weight: bold;">-</span>
                                 @endif
@@ -327,13 +327,13 @@
     const database = [...currentOrders];
     
     // Config variables
-    const storageBaseUrl = "{{ asset('storage') }}";
+    const storageBaseUrl = "/storage";
     let selectedOrderId = null;
     let updatedOrderIds = [];
     let isSoundEnabled = localStorage.getItem('tv_sound_enabled') === 'true';
 
     // Sound alert audio context / player
-    const alertAudio = new Audio("{{ asset('sounds/alert.mp3') }}");
+    const alertAudio = new Audio("/sounds/alert.mp3");
     
     function playAlertSound() {
         alertAudio.currentTime = 0;

@@ -8,7 +8,7 @@
     <!-- Corporate Header Banner -->
     <div style="text-align: center; margin-bottom: 30px;">
         <div class="logo-glass-wrapper" style="padding: 22px; width: 150px; height: 150px; margin-bottom: 20px; display: inline-flex;">
-            <img src="{{ asset('img/logo-btl.png') }}" alt="BTL Marketing Logo" style="height: 105px; object-fit: contain;">
+            <img src="/img/logo-btl.png" alt="BTL Marketing Logo" style="height: 105px; object-fit: contain;">
         </div>
         <h1 style="font-size: 2.1rem; font-weight: 800; margin-bottom: 10px; color: var(--text-white);">
             Portal de Creación de Órdenes de Producción <span style="color: var(--blue-bright);">BTL Marketing</span>

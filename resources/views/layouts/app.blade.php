@@ -7,7 +7,7 @@
     <title>@yield('title', 'Control Center') | BTL Producción</title>
     
     <!-- Custom Style -->
-    <link rel="stylesheet" href="{{ url('/css/style.css') }}?v={{ time() }}">
+    <link rel="stylesheet" href="/css/style.css?v={{ time() }}">
     
     <!-- Meta tags for auto-refresh if defined in child views -->
     @yield('meta_extra')
@@ -18,7 +18,7 @@
     @if(session()->has('user_role') && !request()->is('op/tv'))
         <header>
             <div class="header-left">
-                <img src="{{ asset('img/logo-btl.png') }}" alt="BTL Marketing Logo">
+                <img src="/img/logo-btl.png" alt="BTL Marketing Logo">
                 <div class="header-title-container">
                     <h1>BTL PRODUCCIÓN | <span>CONTROL CENTER</span></h1>
                     <p>Módulo Operativo de Control de Órdenes</p>
