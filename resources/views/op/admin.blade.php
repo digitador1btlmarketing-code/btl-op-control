@@ -10,7 +10,7 @@
     </form>
 @endforeach
 
-<div style="margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center;">
+<div style="margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
     <div>
         <h2 style="font-size: 1.8rem; font-weight: 800;">Panel de Administración de Producción</h2>
         <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 5px;">Digitalización y Control del flujo operativo de BTL Marketing</p>
@@ -24,36 +24,69 @@
 <div class="grid-5" style="margin-bottom: 25px;">
     <!-- Total -->
     <div class="kpi-card">
-        <div class="kpi-value">{{ $kpis['total'] }}</div>
+        <div id="kpi-total" class="kpi-value">{{ $kpis['total'] }}</div>
         <div class="kpi-label">Total Órdenes</div>
     </div>
     <!-- Pendientes -->
     <div class="kpi-card pending">
-        <div class="kpi-value" style="color: var(--state-pendiente);">{{ $kpis['pendientes'] }}</div>
+        <div id="kpi-pendientes" class="kpi-value" style="color: var(--state-pendiente);">{{ $kpis['pendientes'] }}</div>
         <div class="kpi-label">Pendientes</div>
     </div>
     <!-- En Proceso -->
     <div class="kpi-card process">
-        <div class="kpi-value" style="color: var(--state-en-proceso);">{{ $kpis['en_proceso'] }}</div>
+        <div id="kpi-en-proceso" class="kpi-value" style="color: var(--state-en-proceso);">{{ $kpis['en_proceso'] }}</div>
         <div class="kpi-label">En Proceso</div>
     </div>
     <!-- Terminadas -->
     <div class="kpi-card finished">
-        <div class="kpi-value" style="color: var(--state-terminado);">{{ $kpis['terminadas'] }}</div>
+        <div id="kpi-terminadas" class="kpi-value" style="color: var(--state-terminado);">{{ $kpis['terminadas'] }}</div>
         <div class="kpi-label">Terminadas</div>
     </div>
     <!-- Urgentes -->
     <div class="kpi-card urgent">
-        <div class="kpi-value" style="color: var(--priority-urgente);">{{ $kpis['urgentes'] }}</div>
+        <div id="kpi-urgentes" class="kpi-value" style="color: var(--priority-urgente);">{{ $kpis['urgentes'] }}</div>
         <div class="kpi-label">Urgentes 🔥</div>
     </div>
 </div>
 
 <!-- Main Table -->
 <div class="card">
-    <h3 style="font-size: 1.2rem; font-weight: 700; margin-bottom: 20px; color: var(--blue-bright);">
-        Listado de Órdenes de Producción
-    </h3>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
+        <h3 style="font-size: 1.2rem; font-weight: 700; color: var(--blue-bright); margin: 0;">
+            Listado de Órdenes de Producción
+        </h3>
+        
+        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+            <!-- Search by OP number -->
+            <div style="position: relative; min-width: 220px;">
+                <input 
+                    type="text" 
+                    id="search-op" 
+                    placeholder="Buscar por número OP..." 
+                    class="form-control" 
+                    style="padding: 8px 12px; font-size: 0.9rem; height: 38px; width: 100%;"
+                    oninput="applyAdminFilters()"
+                >
+            </div>
+            
+            <!-- Filter by Status -->
+            <div style="min-width: 180px;">
+                <select 
+                    id="filter-status" 
+                    class="form-control" 
+                    style="padding: 8px 12px; font-size: 0.9rem; height: 38px; cursor: pointer; width: 100%;"
+                    onchange="applyAdminFilters()"
+                >
+                    <option value="activas" selected>Todas activas</option>
+                    <option value="Pendiente">Pendientes</option>
+                    <option value="En proceso">En proceso</option>
+                    <option value="Terminado">Terminadas</option>
+                    <option value="Cancelado">Canceladas</option>
+                    <option value="todos">Todas</option>
+                </select>
+            </div>
+        </div>
+    </div>
     
     <div class="table-responsive">
         <table>
@@ -71,13 +104,13 @@
                     <th>Acciones</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="admin-table-body">
                 @forelse($ordenes as $orden)
-                    <tr>
+                    <tr class="admin-row" id="row-{{ $orden->id }}" data-id="{{ $orden->id }}" data-estado="{{ $orden->estado }}" data-prioridad="{{ $orden->prioridad }}" data-numero-op="{{ $orden->numero_op }}">
                         <td>
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <strong style="color: var(--text-white);">{{ $orden->numero_op }}</strong>
-                                <span id="fire-container-{{ $orden->id }}" class="fire-container @if($orden->estado === 'Terminado') extinguished @elseif(!$orden->mostrar_fuego) hidden-fire @endif" title="Alerta de prioridad temporal">
+                                <span id="fire-container-{{ $orden->id }}" class="fire-container @if($orden->estado === 'Terminado' || $orden->estado === 'Cancelado') extinguished @elseif(!$orden->mostrar_fuego) hidden-fire @endif" title="Alerta de prioridad temporal">
                                     <span class="fire-flame">🔥</span>
                                 </span>
                             </div>
@@ -130,6 +163,7 @@
                                             @elseif($orden->estado === 'En proceso') progress-fill-proceso
                                             @elseif($orden->estado === 'Cancelado') progress-fill-cancelado
                                             @else progress-fill-terminado @endif"
+                                        style="width: {{ $orden->avance }}%;"
                                     ></div>
                                 </div>
                                 <span id="progress-text-{{ $orden->id }}" class="progress-text">
@@ -144,7 +178,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr>
+                    <tr id="empty-row">
                         <td colspan="10" style="text-align: center; color: var(--text-muted); padding: 40px;">
                             No hay órdenes de producción registradas.
                         </td>
@@ -158,7 +192,83 @@
 
 @section('scripts')
 <script>
+    function applyAdminFilters() {
+        const searchVal = document.getElementById('search-op').value.toLowerCase().trim();
+        const filterVal = document.getElementById('filter-status').value;
+        const rows = document.querySelectorAll('.admin-row');
+        const emptyRow = document.getElementById('empty-row');
+        
+        let totalCount = 0;
+        let pendienteCount = 0;
+        let procesoCount = 0;
+        let terminadoCount = 0;
+        let urgenteCount = 0;
+        let visibleCount = 0;
+
+        rows.forEach(row => {
+            const estado = row.getAttribute('data-estado');
+            const prioridad = row.getAttribute('data-prioridad');
+            const numeroOp = row.getAttribute('data-numero-op').toLowerCase();
+
+            // Status filter logic
+            let matchesFilter = false;
+            if (filterVal === 'activas') {
+                matchesFilter = (estado === 'Pendiente' || estado === 'En proceso');
+            } else if (filterVal === 'todos') {
+                matchesFilter = true;
+            } else {
+                matchesFilter = (estado === filterVal);
+            }
+
+            // Search by OP number logic
+            let matchesSearch = true;
+            if (searchVal) {
+                matchesSearch = numeroOp.includes(searchVal);
+            }
+
+            if (matchesFilter && matchesSearch) {
+                row.style.display = '';
+                visibleCount++;
+                
+                // Aggregate counts for only matching rows
+                totalCount++;
+                if (estado === 'Pendiente') pendienteCount++;
+                if (estado === 'En proceso') procesoCount++;
+                if (estado === 'Terminado') terminadoCount++;
+                if (prioridad === 'URGENTE') urgenteCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        // Toggle empty message row
+        if (rows.length > 0) {
+            if (visibleCount === 0) {
+                if (!document.getElementById('no-results-row')) {
+                    const tbody = document.getElementById('admin-table-body');
+                    const tr = document.createElement('tr');
+                    tr.id = 'no-results-row';
+                    tr.innerHTML = `<td colspan="10" style="text-align: center; color: var(--text-muted); padding: 40px;">No se encontraron órdenes con los filtros seleccionados.</td>`;
+                    tbody.appendChild(tr);
+                }
+            } else {
+                const noResults = document.getElementById('no-results-row');
+                if (noResults) noResults.remove();
+            }
+        }
+
+        // Update top KPIs grid values
+        document.getElementById('kpi-total').textContent = totalCount;
+        document.getElementById('kpi-pendientes').textContent = pendienteCount;
+        document.getElementById('kpi-en-proceso').textContent = procesoCount;
+        document.getElementById('kpi-terminadas').textContent = terminadoCount;
+        document.getElementById('kpi-urgentes').textContent = urgenteCount;
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
+        // Initial filters run
+        applyAdminFilters();
+
         const forms = document.querySelectorAll('form[id^="form-"]');
         
         forms.forEach(form => {
@@ -167,11 +277,12 @@
                 
                 const formData = new FormData(this);
                 const formId = this.getAttribute('id');
+                const ordenId = formId.replace('form-', '');
                 
-                // Fetch external fields attached via 'form' attribute
+                // Fetch external fields using set() to replace duplicates
                 const externalInputs = document.querySelectorAll(`[form="${formId}"]`);
                 externalInputs.forEach(input => {
-                    formData.append(input.name, input.value);
+                    formData.set(input.name, input.value);
                 });
 
                 const actionUrl = this.getAttribute('action');
@@ -194,8 +305,7 @@
                     if (data.success) {
                         showToast('Orden actualizada correctamente.', 'success');
                         
-                        // Update progress bar dynamically
-                        const ordenId = formId.replace('form-', '');
+                        // Update DOM elements on row
                         const progressFill = document.getElementById(`progress-fill-${ordenId}`);
                         const progressText = document.getElementById(`progress-text-${ordenId}`);
                         
@@ -213,6 +323,14 @@
                                 stateClass = 'progress-fill-cancelado';
                             }
                             progressFill.classList.add(stateClass);
+                            progressFill.style.width = data.avance + '%';
+                        }
+
+                        // Update row properties
+                        const row = document.getElementById(`row-${ordenId}`);
+                        if (row) {
+                            row.setAttribute('data-estado', data.estado);
+                            row.setAttribute('data-prioridad', data.prioridad);
                         }
 
                         // Update fire animation classes dynamically
@@ -228,6 +346,9 @@
                                 }
                             }
                         }
+
+                        // Reapply filters to potentially hide row or update KPIs
+                        applyAdminFilters();
                     } else {
                         showToast('Ocurrió un error: ' + data.message, 'error');
                     }
