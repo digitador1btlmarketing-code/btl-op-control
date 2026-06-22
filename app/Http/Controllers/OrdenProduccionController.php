@@ -31,7 +31,7 @@ class OrdenProduccionController extends Controller
             'fecha_entrega' => 'required|date',
             'hora_entrega' => 'required',
             'entregar_a' => 'required|in:Cliente,Bodega,Instaladores',
-            'brief' => 'nullable|file|mimes:pdf,jpg,jpeg,png,zip,doc,docx|max:20480', // max 20MB
+            'brief' => 'nullable|file|mimes:pdf,ppt,pptx,zip,jpg,jpeg,png,ai,psd|max:102400',
         ];
 
         // Conditional validation based on entregar_a
@@ -58,7 +58,7 @@ class OrdenProduccionController extends Controller
             'hora_instalacion.required' => 'La hora de instalación es obligatoria.',
             'fecha_desinstalacion.required' => 'La fecha de desinstalación es obligatoria.',
             'hora_desinstalacion.required' => 'La hora de desinstalación es obligatoria.',
-            'brief.max' => 'El archivo brief no debe pesar más de 20MB.',
+            'brief.max' => 'El archivo brief no debe pesar más de 100MB.',
         ]);
 
         // Clean up installation fields if not Instaladores

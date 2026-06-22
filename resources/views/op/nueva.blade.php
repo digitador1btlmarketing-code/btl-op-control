@@ -115,9 +115,12 @@
 
             <!-- Brief File Upload -->
             <div class="form-group">
-                <label for="brief">Subir Brief / Diseño (PDF, Imágenes, Zip) *</label>
-                <input type="file" id="brief" name="brief" class="form-control">
-                <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 5px;">Máximo archivo de 20MB</p>
+                <label for="brief">Subir Brief / Diseño *</label>
+                <input type="file" id="brief" name="brief" class="form-control" accept=".pdf,.ppt,.pptx,.zip,.jpg,.jpeg,.png,.ai,.psd">
+                <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 5px; line-height: 1.4;">
+                    Formatos permitidos: PDF, PPT, PPTX, ZIP, JPG, PNG, AI, PSD <br>
+                    Tamaño máximo: 100 MB
+                </p>
                 @error('brief')
                     <span style="color: var(--priority-urgente); font-size: 0.8rem;">{{ $message }}</span>
                 @enderror
@@ -220,6 +223,30 @@
     document.addEventListener('DOMContentLoaded', function() {
         toggleInstallationFields();
         document.getElementById('entregar_a').addEventListener('change', toggleInstallationFields);
+
+        // Frontend validation for brief file upload size and format
+        const fileInput = document.getElementById('brief');
+        if (fileInput) {
+            fileInput.addEventListener('change', function() {
+                if (this.files && this.files[0]) {
+                    const file = this.files[0];
+                    const fileSizeMB = file.size / (1024 * 1024);
+                    const validExtensions = ['pdf', 'ppt', 'pptx', 'zip', 'jpg', 'jpeg', 'png', 'ai', 'psd'];
+                    const extension = file.name.split('.').pop().toLowerCase();
+ 
+                    if (fileSizeMB > 100) {
+                        alert('El archivo supera el tamaño máximo permitido de 100 MB.');
+                        this.value = ''; // clear input
+                        return;
+                    }
+                    if (!validExtensions.includes(extension)) {
+                        alert('El formato del archivo no está permitido. Formatos válidos: PDF, PPT, PPTX, ZIP, JPG, PNG, AI, PSD');
+                        this.value = ''; // clear input
+                        return;
+                    }
+                }
+            });
+        }
     });
 </script>
 @endsection
