@@ -90,6 +90,15 @@
             background: var(--blue-bright);
             box-shadow: 0 0 8px var(--blue-bright);
         }
+        .admin-row {
+            cursor: pointer;
+        }
+        .admin-row:hover {
+            background: rgba(0, 210, 255, 0.04) !important;
+        }
+        .admin-row.active {
+            background: rgba(0, 210, 255, 0.08) !important;
+        }
     </style>
 
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
@@ -236,11 +245,94 @@
         </table>
     </div>
 </div>
+
+<!-- Panel de Detalle de Orden Seleccionada -->
+<div id="detail-panel" class="detail-panel hidden" style="margin-top: 25px; position: relative;">
+    <!-- Hide Button -->
+    <button onclick="hideDetail()" class="btn-logout" style="position: absolute; top: 15px; right: 20px; font-size: 0.8rem; padding: 4px 10px; cursor: pointer; background: rgba(255, 51, 102, 0.15); border-color: rgba(255, 51, 102, 0.3);">Ocultar detalle</button>
+    
+    <h3 class="section-title" style="margin-top: 0; margin-bottom: 15px; font-size: 1.35rem; border-bottom: 1px solid var(--border-glass); padding-bottom: 8px;">
+        📋 Detalle OP: <span id="detail-op-title" style="color: var(--blue-bright);"></span>
+    </h3>
+    
+    <div class="detail-grid">
+        <div class="detail-item">
+            <div class="detail-label">Número OP</div>
+            <div id="detail-op" class="detail-val">-</div>
+        </div>
+        <div class="detail-item">
+            <div class="detail-label">Categoría</div>
+            <div id="detail-categoria" class="detail-val">-</div>
+        </div>
+        <div class="detail-item">
+            <div class="detail-label">Proyecto / Campaña</div>
+            <div id="detail-proyecto" class="detail-val">-</div>
+        </div>
+        <div class="detail-item">
+            <div class="detail-label">Cliente</div>
+            <div id="detail-cliente" class="detail-val">-</div>
+        </div>
+        <div class="detail-item">
+            <div class="detail-label">Marca</div>
+            <div id="detail-marca" class="detail-val">-</div>
+        </div>
+        <div class="detail-item">
+            <div class="detail-label">Presupuestista</div>
+            <div id="detail-presupuestista" class="detail-val">-</div>
+        </div>
+        <div class="detail-item">
+            <div class="detail-label">Líder Producción</div>
+            <div id="detail-lider" class="detail-val">-</div>
+        </div>
+        <div class="detail-item">
+            <div class="detail-label">Fecha y Hora Entrega</div>
+            <div id="detail-entrega" class="detail-val">-</div>
+        </div>
+        <div class="detail-item">
+            <div class="detail-label">Estado</div>
+            <div id="detail-estado" class="detail-val">-</div>
+        </div>
+        <div class="detail-item">
+            <div class="detail-label">Avance</div>
+            <div id="detail-avance" class="detail-val">-</div>
+        </div>
+        <div class="detail-item">
+            <div class="detail-label">Entregar A</div>
+            <div id="detail-entregar-a" class="detail-val">-</div>
+        </div>
+        <div class="detail-item">
+            <div class="detail-label">Brief / Diseño</div>
+            <div id="detail-brief" class="detail-val brief-container">-</div>
+        </div>
+    </div>
+
+    <!-- Conditional Installation fields -->
+    <div id="detail-installation-section" class="hidden" style="margin-top: 15px; border-top: 1px solid var(--border-glass); padding-top: 15px;">
+        <h4 style="font-size: 1rem; color: var(--priority-proxima); margin-bottom: 10px;">Detalles de Montaje e Instalación</h4>
+        <div class="detail-grid">
+            <div class="detail-item">
+                <div class="detail-label">Lugar de Instalación</div>
+                <div id="detail-lugar" class="detail-val">-</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">Instalación (Fecha/Hora)</div>
+                <div id="detail-fecha-inst" class="detail-val">-</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">Desinstalación (Fecha/Hora)</div>
+                <div id="detail-fecha-desinst" class="detail-val">-</div>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection
 
 @section('scripts')
 <script>
     let activeCategory = 'todos';
+    let selectedOrderId = null;
+    let allOrders = @json($ordenes);
+    const storageBaseUrl = "/storage";
 
     function selectCategoryTab(category) {
         activeCategory = category;
@@ -337,6 +429,116 @@
         document.getElementById('kpi-en-proceso').textContent = procesoCount;
         document.getElementById('kpi-terminadas').textContent = terminadoCount;
         document.getElementById('kpi-urgentes').textContent = urgenteCount;
+    }
+
+    function selectOrder(id) {
+        const order = allOrders.find(o => o.id === id);
+        if (!order) return;
+
+        if (selectedOrderId === id) {
+            hideDetail();
+            return;
+        }
+
+        selectedOrderId = id;
+
+        // Highlight selected row
+        document.querySelectorAll('.admin-row').forEach(row => {
+            row.classList.remove('active');
+            if (parseInt(row.getAttribute('data-id')) === id) {
+                row.classList.add('active');
+            }
+        });
+
+        populateDetail(order);
+
+        // Show panel and scroll
+        const detailPanel = document.getElementById('detail-panel');
+        detailPanel.classList.remove('hidden');
+        detailPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function hideDetail() {
+        selectedOrderId = null;
+        
+        document.querySelectorAll('.admin-row').forEach(row => {
+            row.classList.remove('active');
+        });
+
+        const panel = document.getElementById('detail-panel');
+        if (panel) {
+            panel.classList.add('hidden');
+        }
+    }
+
+    function populateDetail(order) {
+        document.getElementById('detail-op-title').textContent = order.numero_op;
+        document.getElementById('detail-op').textContent = order.numero_op;
+        document.getElementById('detail-categoria').textContent = order.categoria;
+        document.getElementById('detail-proyecto').textContent = order.proyecto;
+        document.getElementById('detail-cliente').textContent = order.cliente;
+        document.getElementById('detail-marca').textContent = order.marca;
+        document.getElementById('detail-presupuestista').textContent = order.presupuestista;
+        document.getElementById('detail-lider').innerHTML = order.lider_produccion ? 
+            order.lider_produccion : '<em style="color: var(--text-muted);">Sin asignar</em>';
+        
+        // Format delivery date
+        let formattedDate = '-';
+        let formattedTime = '-';
+        if (order.fecha_entrega) {
+            const rawDate = order.fecha_entrega.split('-');
+            formattedDate = `${rawDate[2]}/${rawDate[1]}/${rawDate[0]}`;
+        }
+        if (order.hora_entrega) {
+            formattedTime = order.hora_entrega.substring(0, 5);
+        }
+        document.getElementById('detail-entrega').textContent = `${formattedDate} a las ${formattedTime} hrs`;
+        
+        let statusBadgeClass = 'badge-pendiente';
+        if (order.estado === 'En proceso') statusBadgeClass = 'badge-proceso';
+        if (order.estado === 'Terminado') statusBadgeClass = 'badge-terminado';
+        if (order.estado === 'Cancelado') statusBadgeClass = 'badge-cancelado';
+        document.getElementById('detail-estado').innerHTML = `<span class="badge ${statusBadgeClass}">${order.estado}</span>`;
+        
+        document.getElementById('detail-avance').textContent = `${order.avance}%`;
+        document.getElementById('detail-entregar-a').textContent = order.entregar_a;
+        
+        const briefDiv = document.getElementById('detail-brief');
+        if (order.brief) {
+            briefDiv.innerHTML = `<a href="${storageBaseUrl}/${order.brief}" target="_blank" class="btn-view-brief" style="background: rgba(0, 210, 255, 0.15); color: var(--blue-bright); border: 1px solid rgba(0, 210, 255, 0.3); padding: 4px 10px; border-radius: 6px; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 5px;">Ver Brief</a>`;
+        } else {
+            briefDiv.textContent = '-';
+        }
+
+        const instSection = document.getElementById('detail-installation-section');
+        if (order.entregar_a === 'Instaladores') {
+            instSection.classList.remove('hidden');
+            document.getElementById('detail-lugar').textContent = order.lugar_instalacion || '-';
+            
+            let fmtInstDate = '-';
+            let fmtInstTime = '-';
+            if (order.fecha_instalacion) {
+                const rawInstDate = order.fecha_instalacion.split('-');
+                fmtInstDate = `${rawInstDate[2]}/${rawInstDate[1]}/${rawInstDate[0]}`;
+            }
+            if (order.hora_instalacion) {
+                fmtInstTime = order.hora_instalacion.substring(0, 5);
+            }
+            document.getElementById('detail-fecha-inst').textContent = `${fmtInstDate} - ${fmtInstTime} hrs`;
+            
+            let fmtDesinstDate = '-';
+            let fmtDesinstTime = '-';
+            if (order.fecha_desinstalacion) {
+                const rawDesinstDate = order.fecha_desinstalacion.split('-');
+                fmtDesinstDate = `${rawDesinstDate[2]}/${rawDesinstDate[1]}/${rawDesinstDate[0]}`;
+            }
+            if (order.hora_desinstalacion) {
+                fmtDesinstTime = order.hora_desinstalacion.substring(0, 5);
+            }
+            document.getElementById('detail-fecha-desinst').textContent = `${fmtDesinstDate} - ${fmtDesinstTime} hrs`;
+        } else {
+            instSection.classList.add('hidden');
+        }
     }
 
     function createRowElement(orden) {
@@ -545,7 +747,27 @@
                 }
                 // Appending an existing or new child moves it to the end of tbody
                 tbody.appendChild(row);
+
+                // Keep selected/active class state
+                if (selectedOrderId && orden.id === selectedOrderId) {
+                    row.classList.add('active');
+                } else {
+                    row.classList.remove('active');
+                }
             });
+
+            // Update local allOrders
+            allOrders = newOrders;
+
+            // Sync detail panel
+            if (selectedOrderId) {
+                const refreshedOrder = allOrders.find(o => o.id === selectedOrderId);
+                if (refreshedOrder) {
+                    populateDetail(refreshedOrder);
+                } else {
+                    hideDetail();
+                }
+            }
 
             // Re-apply filters
             applyAdminFilters();
@@ -559,6 +781,23 @@
 
         // Start polling updates every 5 seconds
         setInterval(pollAdminUpdates, 5000);
+
+        // Event delegation for table row clicks to show details
+        const tableBody = document.getElementById('admin-table-body');
+        if (tableBody) {
+            tableBody.addEventListener('click', function(e) {
+                const row = e.target.closest('.admin-row');
+                if (!row) return;
+                
+                // Do not toggle detail panel if clicked on interactive elements (inputs, selects, buttons, links)
+                if (e.target.closest('input, select, button, a')) {
+                    return;
+                }
+                
+                const id = parseInt(row.getAttribute('data-id'));
+                selectOrder(id);
+            });
+        }
 
         // Event delegation for submit on forms inside forms-container
         document.addEventListener('submit', function(e) {
@@ -622,6 +861,23 @@
                                 } else {
                                     fireContainer.className = 'fire-container hidden-fire';
                                 }
+                            }
+                        }
+
+                        // Update local allOrders state
+                        const localOrderId = parseInt(ordenId);
+                        const localOrder = allOrders.find(o => o.id === localOrderId);
+                        if (localOrder) {
+                            localOrder.estado = data.estado;
+                            localOrder.avance = data.avance;
+                            localOrder.prioridad = data.prioridad;
+                            const inputLider = rowElement.querySelector('input[name="lider_produccion"]');
+                            if (inputLider) {
+                                localOrder.lider_produccion = inputLider.value;
+                            }
+                            // Re-populate details if it's the selected one
+                            if (selectedOrderId === localOrderId) {
+                                populateDetail(localOrder);
                             }
                         }
 
