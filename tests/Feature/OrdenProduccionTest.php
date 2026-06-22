@@ -220,4 +220,103 @@ class OrdenProduccionTest extends TestCase
                 ]
             ]);
     }
+
+    /**
+     * Test admin can reset/clear all orders with the correct password.
+     */
+    public function test_admin_can_reset_orders_with_correct_password(): void
+    {
+        $initialCount = OrdenProduccion::count();
+
+        // 1. Create a dummy order
+        OrdenProduccion::create([
+            'categoria' => 'Branding',
+            'numero_op' => 'OP-Reset-Test',
+            'proyecto' => 'Reset Test',
+            'presupuestista' => 'Test Presupuesto',
+            'cliente' => 'Test Cliente',
+            'marca' => 'Test Marca',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '12:00:00',
+            'entregar_a' => 'Cliente',
+        ]);
+
+        $this->assertEquals($initialCount + 1, OrdenProduccion::count());
+
+        // 2. Perform reset request as admin with correct password
+        session(['user_role' => 'admin']);
+        $response = $this->post('/admin/ordenes/reset', [
+            'reset_password' => 'BTL-RESET-2026'
+        ]);
+
+        $response->assertRedirect('/op/admin');
+        $response->assertSessionHas('success', 'Órdenes eliminadas correctamente.');
+        $this->assertEquals(0, OrdenProduccion::count());
+    }
+
+    /**
+     * Test admin cannot reset/clear orders with incorrect password.
+     */
+    public function test_admin_cannot_reset_orders_with_incorrect_password(): void
+    {
+        $initialCount = OrdenProduccion::count();
+
+        // 1. Create a dummy order
+        OrdenProduccion::create([
+            'categoria' => 'Branding',
+            'numero_op' => 'OP-Reset-Fail',
+            'proyecto' => 'Reset Test Fail',
+            'presupuestista' => 'Test Presupuesto',
+            'cliente' => 'Test Cliente',
+            'marca' => 'Test Marca',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '12:00:00',
+            'entregar_a' => 'Cliente',
+        ]);
+
+        $this->assertEquals($initialCount + 1, OrdenProduccion::count());
+
+        // 2. Perform reset request as admin with WRONG password
+        session(['user_role' => 'admin']);
+        $response = $this->post('/admin/ordenes/reset', [
+            'reset_password' => 'WRONG-PASSWORD'
+        ]);
+
+        $response->assertRedirect('/op/admin');
+        $response->assertSessionHas('error', 'Contraseña de seguridad incorrecta.');
+        $this->assertEquals($initialCount + 1, OrdenProduccion::count());
+    }
+
+    /**
+     * Test non-admin cannot access the reset endpoint.
+     */
+    public function test_non_admin_cannot_reset_orders(): void
+    {
+        $initialCount = OrdenProduccion::count();
+
+        // 1. Create a dummy order
+        OrdenProduccion::create([
+            'categoria' => 'Branding',
+            'numero_op' => 'OP-Reset-NoAuth',
+            'proyecto' => 'Reset Test NoAuth',
+            'presupuestista' => 'Test Presupuesto',
+            'cliente' => 'Test Cliente',
+            'marca' => 'Test Marca',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '12:00:00',
+            'entregar_a' => 'Cliente',
+        ]);
+
+        $this->assertEquals($initialCount + 1, OrdenProduccion::count());
+
+        // 2. Attempt reset as sales role
+        session(['user_role' => 'ventas']);
+        $response = $this->post('/admin/ordenes/reset', [
+            'reset_password' => 'BTL-RESET-2026'
+        ]);
+
+        $response->assertRedirect('/');
+        $response->assertSessionHas('error', 'No tiene permisos para acceder a esta sección.');
+        $this->assertEquals($initialCount + 1, OrdenProduccion::count());
+    }
 }

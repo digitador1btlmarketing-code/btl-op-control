@@ -214,4 +214,33 @@ class OrdenProduccionController extends Controller
             'kpis' => $kpis
         ]);
     }
+
+    /**
+     * Delete all production orders securely.
+     */
+    public function reset(Request $request)
+    {
+        // Secondary security check (redundant with middleware but safe)
+        if (session('user_role') !== 'admin') {
+            return redirect('/')->with('error', 'No tiene permisos para acceder a esta sección.');
+        }
+
+        $request->validate([
+            'reset_password' => 'required|string',
+        ], [
+            'reset_password.required' => 'La contraseña de seguridad es obligatoria.',
+        ]);
+
+        $inputPassword = $request->input('reset_password');
+        $expectedPassword = env('RESET_PASSWORD');
+
+        if ($inputPassword !== $expectedPassword) {
+            return redirect()->route('op.admin')->with('error', 'Contraseña de seguridad incorrecta.');
+        }
+
+        // Truncate only the orden_produccions table
+        OrdenProduccion::truncate();
+
+        return redirect()->route('op.admin')->with('success', 'Órdenes eliminadas correctamente.');
+    }
 }

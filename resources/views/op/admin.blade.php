@@ -325,6 +325,59 @@
         </div>
     </div>
 </div>
+
+<!-- Danger zone at the bottom -->
+@if(session('user_role') === 'admin')
+<div class="card" style="margin-top: 30px; border-color: rgba(255, 51, 102, 0.3); background: rgba(255, 51, 102, 0.03);">
+    <h3 style="font-size: 1.2rem; font-weight: 700; color: var(--priority-urgente); margin-bottom: 10px;">
+        ⚠️ Zona de Peligro Administrativa
+    </h3>
+    <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 15px;">
+        Acciones críticas de mantenimiento del sistema. Estas operaciones modifican permanentemente los datos operativos.
+    </p>
+    
+    <button onclick="openResetModal()" class="btn-logout" style="background: rgba(255, 51, 102, 0.2); color: var(--priority-urgente); border-color: rgba(255, 51, 102, 0.4); padding: 10px 20px; font-size: 0.95rem; font-weight: 700; cursor: pointer; width: auto; display: inline-flex; align-items: center; gap: 8px;">
+        🗑️ Borrar todos los reportes
+    </button>
+
+    <!-- Hidden Reset Form -->
+    <form id="reset-form" action="{{ route('op.reset') }}" method="POST" class="hidden">
+        @csrf
+        <input type="hidden" name="reset_password" id="reset-password-input">
+    </form>
+</div>
+
+<!-- Secure Reset Modal -->
+<div id="reset-modal" class="custom-modal-overlay hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(8, 13, 26, 0.85); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 10000; transition: var(--transition);">
+    <div class="card" style="max-width: 500px; width: 90%; border-color: rgba(255, 51, 102, 0.4); box-shadow: 0 0 30px rgba(255, 51, 102, 0.25); text-align: center; padding: 30px; margin-bottom: 0;">
+        <div style="font-size: 3rem; margin-bottom: 15px;">⚠️</div>
+        <h3 style="font-size: 1.4rem; font-weight: 800; color: var(--priority-urgente); margin-bottom: 15px;">Confirmación de Seguridad</h3>
+        
+        <p style="color: var(--text-white); font-size: 0.95rem; line-height: 1.6; margin-bottom: 20px; font-weight: 600;">
+            Esta acción eliminará todas las órdenes de producción registradas. Esta acción no se puede deshacer.
+        </p>
+        
+        <div style="margin-bottom: 20px; text-align: left;">
+            <label for="reset-password-modal-input" style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase;">
+                Contraseña de Seguridad:
+            </label>
+            <input 
+                type="password" 
+                id="reset-password-modal-input" 
+                class="form-control" 
+                placeholder="Ingrese la contraseña de seguridad..."
+                style="border-color: rgba(255, 51, 102, 0.2);"
+                onkeydown="if(event.key === 'Enter') submitResetForm()"
+            >
+        </div>
+        
+        <div style="display: flex; gap: 12px; justify-content: center;">
+            <button onclick="closeResetModal()" class="filter-btn" style="padding: 10px 20px; min-width: 100px;">Cancelar</button>
+            <button onclick="submitResetForm()" class="btn-primary" style="background: linear-gradient(135deg, var(--priority-urgente) 0%, #d90036 100%); color: white; width: auto; padding: 10px 25px; box-shadow: 0 0 15px rgba(255, 51, 102, 0.3);">Confirmar y Borrar</button>
+        </div>
+    </div>
+</div>
+@endif
 @endsection
 
 @section('scripts')
@@ -893,5 +946,41 @@
             }
         });
     });
+
+    function openResetModal() {
+        const modal = document.getElementById('reset-modal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            const input = document.getElementById('reset-password-modal-input');
+            if (input) {
+                input.value = '';
+                setTimeout(() => input.focus(), 100);
+            }
+        }
+    }
+
+    function closeResetModal() {
+        const modal = document.getElementById('reset-modal');
+        if (modal) {
+            modal.classList.add('hidden');
+        }
+    }
+
+    function submitResetForm() {
+        const input = document.getElementById('reset-password-modal-input');
+        if (!input) return;
+        const password = input.value;
+        if (!password.trim()) {
+            showToast("Por favor, ingrese la contraseña de seguridad.", "error");
+            return;
+        }
+        
+        const formInput = document.getElementById('reset-password-input');
+        const form = document.getElementById('reset-form');
+        if (formInput && form) {
+            formInput.value = password;
+            form.submit();
+        }
+    }
 </script>
 @endsection
