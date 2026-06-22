@@ -48,6 +48,7 @@
                     <span class="tv-meta" style="font-size: 0.85rem; margin: 0;">Fecha: <span id="live-date" style="color: var(--text-white); font-weight: 600;">--/--/----</span></span>
                     <span class="tv-meta" style="font-size: 0.85rem; margin: 0; margin-left: 5px;">Hora: <span id="live-time" style="color: var(--green-lime); font-weight: 600;">--:--:--</span></span>
                     <span class="tv-meta" style="font-size: 0.75rem; color: var(--text-muted); margin: 0; margin-left: 5px;">Última act: <span id="last-update-time" style="color: var(--text-white); font-weight: normal;">{{ date('d/m/Y H:i:s') }}</span></span>
+                    <span id="updating-indicator" class="tv-meta" style="font-size: 0.75rem; color: var(--blue-bright); margin: 0; margin-left: 8px; opacity: 0; transition: opacity 0.25s ease; font-weight: 700;">🔄 Actualizando...</span>
                 </div>
             </div>
         </div>
@@ -726,8 +727,11 @@
         container.innerHTML = html;
     }
 
-    // Dynamic AJAX updates polling loop (runs every 5 seconds)
+    // Dynamic AJAX updates polling loop (runs every 8 seconds)
     function pollUpdates() {
+        const indicator = document.getElementById('updating-indicator');
+        if (indicator) indicator.style.opacity = '1';
+
         fetch(`/op/tv/updates?categoria={{ $categoria }}`, {
             headers: {
                 'X-Requested-With': 'XMLHttpRequest',
@@ -853,7 +857,10 @@
                 }
             }
         })
-        .catch(err => console.log("AJAX updates polling error:", err));
+        .catch(err => console.log("AJAX updates polling error:", err))
+        .finally(() => {
+            if (indicator) indicator.style.opacity = '0';
+        });
     }
 
     // Clock ticking
@@ -886,8 +893,8 @@
             selectOrder(parseInt(savedId));
         }
 
-        // Start polling updates every 15 seconds
-        setInterval(pollUpdates, 15000);
+        // Start polling updates every 8 seconds
+        setInterval(pollUpdates, 8000);
     });
 </script>
 @endsection
