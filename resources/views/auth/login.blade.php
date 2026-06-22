@@ -41,7 +41,7 @@
         </form>
 
         <div style="margin-top: 25px; font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;">
-            Soporte TI BTL Marketing &copy; {{ date('Y') }}
+            BTL Marketing Nicaragua &copy; {{ date('Y') }}
         </div>
     </div>
 </div>
