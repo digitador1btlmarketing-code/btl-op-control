@@ -25,6 +25,187 @@
     
     --font-primary: 'Outfit', sans-serif;
     --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+
+    /* Theme Layout Variables */
+    --bg-gradient: 
+        radial-gradient(circle at 10% 20%, rgba(0, 210, 255, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(255, 51, 102, 0.06) 0%, transparent 45%),
+        radial-gradient(circle at 50% 50%, rgba(0, 210, 255, 0.03) 0%, transparent 50%),
+        linear-gradient(rgba(255, 255, 255, 0.005) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.005) 1px, transparent 1px);
+    --bg-header: rgba(8, 13, 26, 0.8);
+    --bg-kpi: rgba(16, 24, 48, 0.45);
+    --bg-input: rgba(8, 13, 26, 0.6);
+    --border-input: var(--border-glass);
+    --row-hover: rgba(255, 255, 255, 0.02);
+    --bg-detail: rgba(16, 24, 48, 0.9);
+    --border-row: rgba(255, 255, 255, 0.05);
+    --bg-progress-track: rgba(255, 255, 255, 0.05);
+    --bg-modal-overlay: rgba(8, 13, 26, 0.85);
+    --card-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    --detail-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    --border-hover-card: rgba(255, 255, 255, 0.15);
+    
+    --logo-shadow: 0 0 15px rgba(0, 210, 255, 0.3), 0 4px 15px rgba(0, 0, 0, 0.3);
+    --logo-wrapper-shadow: 0 0 20px rgba(0, 210, 255, 0.3), 0 8px 30px rgba(0, 0, 0, 0.35);
+
+    /* Badges variables */
+    --bg-badge-pendiente: rgba(243, 166, 59, 0.1);
+    --border-badge-pendiente: rgba(243, 166, 59, 0.2);
+    --bg-badge-proceso: rgba(0, 210, 255, 0.1);
+    --border-badge-proceso: rgba(0, 210, 255, 0.2);
+    --bg-badge-terminado: rgba(0, 242, 195, 0.1);
+    --border-badge-terminado: rgba(0, 242, 195, 0.2);
+    --bg-badge-cancelado: rgba(108, 117, 125, 0.15);
+    --border-badge-cancelado: rgba(108, 117, 125, 0.3);
+    --bg-badge-urgente: rgba(255, 51, 102, 0.15);
+    --border-badge-urgente: rgba(255, 51, 102, 0.3);
+    --bg-badge-proxima: rgba(255, 141, 114, 0.1);
+    --border-badge-proxima: rgba(255, 141, 114, 0.2);
+    --bg-badge-normal: rgba(0, 210, 255, 0.1);
+    --border-badge-normal: rgba(0, 210, 255, 0.2);
+    --text-cancelado: #a0aec0;
+
+    /* Buttons variables */
+    --bg-btn-save: rgba(0, 242, 195, 0.1);
+    --border-btn-save: rgba(0, 242, 195, 0.2);
+    --bg-btn-logout: rgba(255, 51, 102, 0.1);
+    --border-btn-logout: rgba(255, 51, 102, 0.2);
+    --bg-btn-view: rgba(0, 210, 255, 0.1);
+    --border-btn-view: rgba(0, 210, 255, 0.25);
+
+    /* Scrollbars */
+    --bg-scrollbar-track: rgba(255, 255, 255, 0.02);
+    --bg-scrollbar-thumb: rgba(255, 51, 102, 0.2);
+    --bg-scrollbar-thumb-hover: rgba(255, 51, 102, 0.4);
+
+    /* TV Variables */
+    --bg-tv-body: #04060b;
+    --bg-tv-header: rgba(10, 15, 30, 0.95);
+    --bg-tv-table-th: rgba(16, 24, 48, 0.4);
+    --border-tv-table-td: rgba(255, 255, 255, 0.08);
+    --bg-atencion-card: linear-gradient(135deg, rgba(255, 51, 102, 0.08) 0%, rgba(16, 24, 48, 0.75) 100%);
+    --bg-atencion-card-proxima: linear-gradient(135deg, rgba(255, 141, 114, 0.08) 0%, rgba(16, 24, 48, 0.75) 100%);
+    --bg-btn-theme-toggle: rgba(255, 255, 255, 0.05);
+    --bg-filter-btn: rgba(16, 24, 48, 0.65);
+
+    /* Toast Variables */
+    --bg-toast: rgba(16, 24, 48, 0.95);
+    --toast-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="light"] {
+    --bg-navy: #f5f7fa;
+    --bg-card: #ffffff;
+    --border-glass: rgba(0, 0, 0, 0.08);
+    --border-active: #007aff;
+    
+    --blue-bright: #0052cc;
+    --blue-glow: rgba(0, 82, 204, 0.15);
+    --green-lime: #10b981;
+    --green-glow: rgba(16, 185, 129, 0.15);
+    --text-white: #1f2937;
+    --text-muted: #6b7280;
+    
+    /* Priorities */
+    --priority-normal: #0052cc;
+    --priority-proxima: #f97316;
+    --priority-urgente: #ef4444;
+    
+    /* States */
+    --state-pendiente: #d97706;
+    --state-en-proceso: #0052cc;
+    --state-terminado: #10b981;
+
+    /* Light Mode Overrides */
+    --bg-gradient: 
+        radial-gradient(circle at 10% 20%, rgba(0, 82, 204, 0.02) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(239, 68, 68, 0.015) 0%, transparent 45%),
+        linear-gradient(rgba(0, 0, 0, 0.015) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 0, 0, 0.015) 1px, transparent 1px);
+    --bg-header: rgba(255, 255, 255, 0.92);
+    --bg-kpi: #ffffff;
+    --bg-input: #ffffff;
+    --border-input: rgba(0, 0, 0, 0.15);
+    --row-hover: rgba(0, 0, 0, 0.02);
+    --bg-detail: #ffffff;
+    --border-row: rgba(0, 0, 0, 0.06);
+    --bg-progress-track: rgba(0, 0, 0, 0.06);
+    --bg-modal-overlay: rgba(0, 0, 0, 0.4);
+    --card-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.05);
+    --detail-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    --border-hover-card: rgba(0, 0, 0, 0.12);
+    
+    --logo-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --logo-wrapper-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+
+    /* Badges variables */
+    --bg-badge-pendiente: rgba(217, 119, 6, 0.08);
+    --border-badge-pendiente: rgba(217, 119, 6, 0.18);
+    --bg-badge-proceso: rgba(0, 82, 204, 0.08);
+    --border-badge-proceso: rgba(0, 82, 204, 0.15);
+    --bg-badge-terminado: rgba(16, 185, 129, 0.08);
+    --border-badge-terminado: rgba(16, 185, 129, 0.18);
+    --bg-badge-cancelado: rgba(107, 114, 128, 0.08);
+    --border-badge-cancelado: rgba(107, 114, 128, 0.18);
+    --bg-badge-urgente: rgba(239, 68, 68, 0.08);
+    --border-badge-urgente: rgba(239, 68, 68, 0.18);
+    --bg-badge-proxima: rgba(249, 115, 22, 0.08);
+    --border-badge-proxima: rgba(249, 115, 22, 0.18);
+    --bg-badge-normal: rgba(0, 82, 204, 0.08);
+    --border-badge-normal: rgba(0, 82, 204, 0.15);
+    --text-cancelado: #4b5563;
+
+    /* Buttons variables */
+    --bg-btn-save: rgba(16, 185, 129, 0.08);
+    --border-btn-save: rgba(16, 185, 129, 0.18);
+    --bg-btn-logout: rgba(239, 68, 68, 0.08);
+    --border-btn-logout: rgba(239, 68, 68, 0.18);
+    --bg-btn-view: rgba(0, 82, 204, 0.08);
+    --border-btn-view: rgba(0, 82, 204, 0.18);
+
+    /* Scrollbars */
+    --bg-scrollbar-track: rgba(0, 0, 0, 0.02);
+    --bg-scrollbar-thumb: rgba(239, 68, 68, 0.35);
+    --bg-scrollbar-thumb-hover: rgba(239, 68, 68, 0.5);
+
+    /* TV Variables */
+    --bg-tv-body: #f5f7fa;
+    --bg-tv-header: rgba(255, 255, 255, 0.92);
+    --bg-tv-table-th: rgba(0, 0, 0, 0.03);
+    --border-tv-table-td: rgba(0, 0, 0, 0.06);
+    --bg-atencion-card: linear-gradient(135deg, rgba(239, 68, 68, 0.06) 0%, rgba(255, 255, 255, 0.95) 100%);
+    --bg-atencion-card-proxima: linear-gradient(135deg, rgba(249, 115, 22, 0.06) 0%, rgba(255, 255, 255, 0.95) 100%);
+    --bg-btn-theme-toggle: rgba(0, 0, 0, 0.05);
+    --bg-filter-btn: #ffffff;
+
+    /* Toast Variables */
+    --bg-toast: #ffffff;
+    --toast-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.btn-theme-toggle {
+    background: var(--bg-btn-theme-toggle);
+    border: 1px solid var(--border-glass);
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-white);
+    transition: var(--transition);
+}
+
+.btn-theme-toggle:hover {
+    background: var(--border-glass);
+}
+
+.tv-header .btn-theme-toggle {
+    padding: 4px 12px;
+    font-size: 0.8rem;
 }
 
 * {
@@ -34,12 +215,7 @@
 }
 body {
     background-color: var(--bg-navy);
-    background-image: 
-        radial-gradient(circle at 10% 20%, rgba(0, 210, 255, 0.08) 0%, transparent 40%),
-        radial-gradient(circle at 90% 80%, rgba(255, 51, 102, 0.06) 0%, transparent 45%),
-        radial-gradient(circle at 50% 50%, rgba(0, 210, 255, 0.03) 0%, transparent 50%),
-        linear-gradient(rgba(255, 255, 255, 0.005) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255, 255, 255, 0.005) 1px, transparent 1px);
+    background-image: var(--bg-gradient);
     background-size: auto, auto, auto, 60px 60px, 60px 60px;
     color: var(--text-white);
     font-family: var(--font-primary);
@@ -64,7 +240,7 @@ header {
     justify-content: space-between;
     align-items: center;
     padding: 20px 40px;
-    background: rgba(8, 13, 26, 0.8);
+    background: var(--bg-header);
     backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--border-glass);
 }
@@ -83,12 +259,12 @@ header {
     border: 1.5px solid rgba(255, 255, 255, 0.5);
     border-radius: 50%;
     padding: 10px;
-    box-shadow: 0 0 15px rgba(0, 210, 255, 0.3), 0 4px 15px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--logo-shadow);
     transition: var(--transition);
 }
 .header-left img:hover {
     background: rgba(255, 255, 255, 0.92);
-    box-shadow: 0 0 20px rgba(0, 210, 255, 0.45), 0 4px 20px rgba(0, 0, 0, 0.4);
+    box-shadow: var(--logo-shadow);
     transform: scale(1.05);
 }
 
@@ -115,9 +291,9 @@ header {
 }
 
 .btn-logout {
-    background: rgba(255, 51, 102, 0.1);
+    background: var(--bg-btn-logout);
     color: var(--priority-urgente);
-    border: 1px solid rgba(255, 51, 102, 0.2);
+    border: 1px solid var(--border-btn-logout);
     padding: 8px 16px;
     border-radius: 8px;
     font-size: 0.85rem;
@@ -141,13 +317,13 @@ header {
     border: 1px solid var(--border-glass);
     border-radius: 16px;
     padding: 25px;
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    box-shadow: var(--card-shadow);
     margin-bottom: 25px;
     transition: var(--transition);
 }
 
 .card:hover {
-    border-color: rgba(255, 255, 255, 0.15);
+    border-color: var(--border-hover-card);
 }
 
 /* Forms */
@@ -166,8 +342,8 @@ header {
 .form-control, select, textarea {
     width: 100%;
     padding: 14px 18px;
-    background: rgba(8, 13, 26, 0.6);
-    border: 1px solid var(--border-glass);
+    background: var(--bg-input);
+    border: 1px solid var(--border-input);
     border-radius: 8px;
     color: var(--text-white);
     font-family: var(--font-primary);
@@ -179,7 +355,7 @@ header {
     outline: none;
     border-color: var(--border-active);
     box-shadow: 0 0 10px var(--blue-glow);
-    background: rgba(8, 13, 26, 0.8);
+    background: var(--bg-input);
 }
 
 select option {
@@ -249,12 +425,12 @@ input[type="file"]::file-selector-button:hover {
     border-radius: 50%;
     padding: 20px;
     margin-bottom: 25px;
-    box-shadow: 0 0 20px rgba(0, 210, 255, 0.3), 0 8px 30px rgba(0, 0, 0, 0.35);
+    box-shadow: var(--logo-wrapper-shadow);
     transition: var(--transition);
 }
 .logo-glass-wrapper:hover {
     background: rgba(255, 255, 255, 0.92);
-    box-shadow: 0 0 25px rgba(0, 210, 255, 0.45), 0 8px 35px rgba(0, 0, 0, 0.4);
+    box-shadow: var(--logo-wrapper-shadow);
     transform: scale(1.03);
 }
 .login-logo {
@@ -301,7 +477,7 @@ input[type="file"]::file-selector-button:hover {
 
 /* KPI Badges / Cards */
 .kpi-card {
-    background: rgba(16, 24, 48, 0.45);
+    background: var(--bg-kpi);
     border: 1px solid var(--border-glass);
     border-radius: 12px;
     padding: 18px;
@@ -364,7 +540,7 @@ th {
 
 td {
     padding: 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid var(--border-row);
     vertical-align: middle;
 }
 
@@ -373,7 +549,7 @@ tbody tr {
 }
 
 tbody tr:hover {
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--row-hover);
 }
 
 /* TV interactive pointer cursor for rows */
@@ -398,46 +574,46 @@ tbody tr:hover {
 }
 
 .badge-pendiente {
-    background: rgba(243, 166, 59, 0.1);
+    background: var(--bg-badge-pendiente);
     color: var(--state-pendiente);
-    border-color: rgba(243, 166, 59, 0.2);
+    border-color: var(--border-badge-pendiente);
 }
 
 .badge-proceso {
-    background: rgba(0, 210, 255, 0.1);
+    background: var(--bg-badge-proceso);
     color: var(--state-en-proceso);
-    border-color: rgba(0, 210, 255, 0.2);
+    border-color: var(--border-badge-proceso);
 }
 
 .badge-terminado {
-    background: rgba(0, 242, 195, 0.1);
+    background: var(--bg-badge-terminado);
     color: var(--state-terminado);
-    border-color: rgba(0, 242, 195, 0.2);
+    border-color: var(--border-badge-terminado);
 }
 
 .badge-cancelado {
-    background: rgba(108, 117, 125, 0.15);
-    color: #a0aec0;
-    border-color: rgba(108, 117, 125, 0.3);
+    background: var(--bg-badge-cancelado);
+    color: var(--text-cancelado);
+    border-color: var(--border-badge-cancelado);
 }
 
 .badge-urgente {
-    background: rgba(255, 51, 102, 0.15);
+    background: var(--bg-badge-urgente);
     color: var(--priority-urgente);
-    border-color: rgba(255, 51, 102, 0.3);
+    border-color: var(--border-badge-urgente);
     box-shadow: 0 0 10px rgba(255, 51, 102, 0.1);
 }
 
 .badge-proxima {
-    background: rgba(255, 141, 114, 0.1);
+    background: var(--bg-badge-proxima);
     color: var(--priority-proxima);
-    border-color: rgba(255, 141, 114, 0.2);
+    border-color: var(--border-badge-proxima);
 }
 
 .badge-normal {
-    background: rgba(0, 210, 255, 0.1);
+    background: var(--bg-badge-normal);
     color: var(--priority-normal);
-    border-color: rgba(0, 210, 255, 0.2);
+    border-color: var(--border-badge-normal);
 }
 
 /* Progress bar */
@@ -450,7 +626,7 @@ tbody tr:hover {
 .progress-track {
     flex: 1;
     height: 8px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--bg-progress-track);
     border-radius: 4px;
     overflow: hidden;
 }
@@ -493,9 +669,9 @@ tbody tr:hover {
 
 /* Buttons and file views */
 .btn-view-brief {
-    background: rgba(0, 210, 255, 0.1);
+    background: var(--bg-btn-view);
     color: var(--blue-bright);
-    border: 1px solid rgba(0, 210, 255, 0.25);
+    border: 1px solid var(--border-btn-view);
     padding: 6px 12px;
     border-radius: 6px;
     text-decoration: none;
@@ -543,8 +719,8 @@ tbody tr:hover {
 .admin-select {
     padding: 6px 12px;
     font-size: 0.85rem;
-    background: rgba(8, 13, 26, 0.8);
-    border: 1px solid var(--border-glass);
+    background: var(--bg-input);
+    border: 1px solid var(--border-input);
     border-radius: 6px;
     color: var(--text-white);
     font-family: var(--font-primary);
@@ -555,8 +731,8 @@ tbody tr:hover {
 .admin-input-lider {
     padding: 6px 12px;
     font-size: 0.85rem;
-    background: rgba(8, 13, 26, 0.8);
-    border: 1px solid var(--border-glass);
+    background: var(--bg-input);
+    border: 1px solid var(--border-input);
     border-radius: 6px;
     color: var(--text-white);
     font-family: var(--font-primary);
@@ -564,9 +740,9 @@ tbody tr:hover {
 }
 
 .btn-save-inline {
-    background: rgba(0, 242, 195, 0.1);
+    background: var(--bg-btn-save);
     color: var(--green-lime);
-    border: 1px solid rgba(0, 242, 195, 0.2);
+    border: 1px solid var(--border-btn-save);
     padding: 6px 12px;
     border-radius: 6px;
     font-size: 0.8rem;
@@ -584,7 +760,7 @@ tbody tr:hover {
 /* TV View optimizations (designed for 45" TV or larger) */
 .tv-body {
     padding: 8px;
-    background-color: #04060b;
+    background-color: var(--bg-tv-body);
 }
 
 .tv-container {
@@ -594,7 +770,7 @@ tbody tr:hover {
 
 .tv-header {
     padding: 10px 20px;
-    background: rgba(10, 15, 30, 0.95);
+    background: var(--bg-tv-header);
     margin-bottom: 10px;
     border-radius: 10px;
     border: 1px solid var(--border-glass);
@@ -644,14 +820,14 @@ tbody tr:hover {
     padding: 14px 10px;
     border-bottom: 2px solid var(--border-glass);
     color: var(--text-white);
-    background: rgba(16, 24, 48, 0.4);
+    background: var(--bg-tv-table-th);
 }
 
 .tv-table td {
     font-size: 1.45rem; /* Large font size for visibility */
     padding: 16px 10px; /* Comfortable height but compact to fit more rows */
     font-weight: 600;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid var(--border-tv-table-td);
 }
 
 .tv-table .badge {
@@ -689,7 +865,7 @@ tbody tr:hover {
 }
 
 .atencion-card {
-    background: linear-gradient(135deg, rgba(255, 51, 102, 0.08) 0%, rgba(16, 24, 48, 0.75) 100%);
+    background: var(--bg-atencion-card);
     border: 1px solid rgba(255, 51, 102, 0.25);
     border-radius: 10px;
     padding: 12px 16px;
@@ -700,7 +876,7 @@ tbody tr:hover {
 }
 
 .atencion-card.proxima {
-    background: linear-gradient(135deg, rgba(255, 141, 114, 0.08) 0%, rgba(16, 24, 48, 0.75) 100%);
+    background: var(--bg-atencion-card-proxima);
     border: 1px solid rgba(255, 141, 114, 0.2);
     box-shadow: 0 4px 15px rgba(255, 141, 114, 0.03);
 }
@@ -744,12 +920,12 @@ tbody tr:hover {
 
 /* Detail panel styling */
 .detail-panel {
-    background: rgba(16, 24, 48, 0.9);
+    background: var(--bg-detail);
     border: 1px solid var(--border-glass);
     border-radius: 12px;
     padding: 16px 20px;
     margin-top: 15px;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    box-shadow: var(--detail-shadow);
 }
 
 .detail-grid {
@@ -803,9 +979,12 @@ tbody tr:hover {
     padding: 15px 25px;
     border-radius: 8px;
     color: var(--text-white);
+    background: var(--bg-toast);
+    border: 1px solid var(--border-glass);
+    border-left: 5px solid var(--blue-bright);
     font-weight: 600;
     font-size: 0.95rem;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--toast-shadow);
     z-index: 1000;
     opacity: 0;
     transform: translateY(20px);
@@ -820,11 +999,26 @@ tbody tr:hover {
 .toast-success {
     background: #00f2c3;
     color: #05070c;
+    border-left-color: #00f2c3;
 }
 
 .toast-error {
     background: #ff3366;
     color: white;
+    border-left-color: #ff3366;
+}
+
+/* Light mode overrides for global toasts to look like clean cards with left border */
+[data-theme="light"] .toast-success {
+    background: #ffffff;
+    color: var(--text-white);
+    border-left-color: var(--green-lime);
+}
+
+[data-theme="light"] .toast-error {
+    background: #ffffff;
+    color: var(--text-white);
+    border-left-color: var(--priority-urgente);
 }
 
 /* Responsive adjustments */
@@ -956,15 +1150,15 @@ tbody tr:hover {
     width: 6px;
 }
 .atencion-grid-vertical::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--bg-scrollbar-track);
     border-radius: 3px;
 }
 .atencion-grid-vertical::-webkit-scrollbar-thumb {
-    background: rgba(255, 51, 102, 0.2);
+    background: var(--bg-scrollbar-thumb);
     border-radius: 3px;
 }
 .atencion-grid-vertical::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 51, 102, 0.4);
+    background: var(--bg-scrollbar-thumb-hover);
 }
 
 @media (max-width: 1200px) {
@@ -1013,7 +1207,7 @@ tbody tr:hover {
 }
 
 .filter-btn {
-    background: rgba(16, 24, 48, 0.65);
+    background: var(--bg-filter-btn);
     color: var(--text-muted);
     border: 1px solid var(--border-glass);
     padding: 8px 16px;
@@ -1063,7 +1257,7 @@ input[type="date"], input[type="time"] {
     background: rgba(255, 255, 255, 0.85) !important;
     backdrop-filter: blur(12px);
     border: 1.5px solid rgba(255, 255, 255, 0.5) !important;
-    box-shadow: 0 0 20px rgba(0, 210, 255, 0.3), 0 8px 30px rgba(0, 0, 0, 0.35) !important;
+    box-shadow: var(--logo-wrapper-shadow) !important;
 }
 
 .tv-logo-img {
@@ -1166,13 +1360,13 @@ input[type="date"], input[type="time"] {
 }
 
 .custom-toast {
-    background: rgba(16, 24, 48, 0.95);
+    background: var(--bg-toast);
     border: 1px solid var(--border-glass);
     border-left: 5px solid var(--blue-bright);
     border-radius: 8px;
     padding: 15px 20px;
     color: var(--text-white);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    box-shadow: var(--toast-shadow);
     display: flex;
     align-items: center;
     gap: 12px;

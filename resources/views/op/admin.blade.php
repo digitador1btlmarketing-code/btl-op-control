@@ -326,29 +326,36 @@
     </div>
 </div>
 
-<!-- Danger zone at the bottom -->
 @if(session('user_role') === 'admin')
-<div class="card" style="margin-top: 30px; border-color: rgba(255, 51, 102, 0.3); background: rgba(255, 51, 102, 0.03);">
-    <h3 style="font-size: 1.2rem; font-weight: 700; color: var(--priority-urgente); margin-bottom: 10px;">
-        ⚠️ Zona de Peligro Administrativa
-    </h3>
-    <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 15px;">
-        Acciones críticas de mantenimiento del sistema. Estas operaciones modifican permanentemente los datos operativos.
-    </p>
-    
-    <button onclick="openResetModal()" class="btn-logout" style="background: rgba(255, 51, 102, 0.2); color: var(--priority-urgente); border-color: rgba(255, 51, 102, 0.4); padding: 10px 20px; font-size: 0.95rem; font-weight: 700; cursor: pointer; width: auto; display: inline-flex; align-items: center; gap: 8px;">
-        🗑️ Borrar todos los reportes
-    </button>
+<!-- Hidden Reset Form -->
+<form id="reset-form" action="{{ route('op.reset') }}" method="POST" class="hidden">
+    @csrf
+    <input type="hidden" name="reset_password" id="reset-password-input">
+</form>
 
-    <!-- Hidden Reset Form -->
-    <form id="reset-form" action="{{ route('op.reset') }}" method="POST" class="hidden">
-        @csrf
-        <input type="hidden" name="reset_password" id="reset-password-input">
-    </form>
+<!-- Maintenance Options Modal -->
+<div id="maintenance-modal" class="custom-modal-overlay hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-modal-overlay); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 9999; transition: var(--transition);">
+    <div class="card" style="max-width: 450px; width: 90%; border-color: var(--border-glass); box-shadow: var(--card-shadow); text-align: center; padding: 30px; margin-bottom: 0;">
+        <h3 style="font-size: 1.3rem; font-weight: 800; color: var(--blue-bright); margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+            ⚙ Opciones de Mantenimiento
+        </h3>
+        
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 25px; line-height: 1.5;">
+            Acceso a funciones administrativas especiales para la gestión operativa del sistema BTL Producción.
+        </p>
+
+        <button onclick="triggerResetFromMaintenance()" class="btn-logout" style="width: 100%; padding: 12px 20px; font-size: 0.95rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 20px;">
+            🗑️ Borrar todos los reportes
+        </button>
+        
+        <button onclick="closeMaintenanceModal()" class="filter-btn" style="width: 100%; padding: 10px 20px; font-weight: 600;">
+            Cerrar
+        </button>
+    </div>
 </div>
 
 <!-- Secure Reset Modal -->
-<div id="reset-modal" class="custom-modal-overlay hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(8, 13, 26, 0.85); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 10000; transition: var(--transition);">
+<div id="reset-modal" class="custom-modal-overlay hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-modal-overlay); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 10000; transition: var(--transition);">
     <div class="card" style="max-width: 500px; width: 90%; border-color: rgba(255, 51, 102, 0.4); box-shadow: 0 0 30px rgba(255, 51, 102, 0.25); text-align: center; padding: 30px; margin-bottom: 0;">
         <div style="font-size: 3rem; margin-bottom: 15px;">⚠️</div>
         <h3 style="font-size: 1.4rem; font-weight: 800; color: var(--priority-urgente); margin-bottom: 15px;">Confirmación de Seguridad</h3>
@@ -981,6 +988,25 @@
             formInput.value = password;
             form.submit();
         }
+    }
+
+    function openMaintenanceModal() {
+        const modal = document.getElementById('maintenance-modal');
+        if (modal) {
+            modal.classList.remove('hidden');
+        }
+    }
+
+    function closeMaintenanceModal() {
+        const modal = document.getElementById('maintenance-modal');
+        if (modal) {
+            modal.classList.add('hidden');
+        }
+    }
+
+    function triggerResetFromMaintenance() {
+        closeMaintenanceModal();
+        openResetModal();
     }
 </script>
 @endsection

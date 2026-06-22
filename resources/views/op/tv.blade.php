@@ -36,6 +36,11 @@
                     <button id="btn-sound-toggle" class="btn-view-brief" style="font-size: 0.8rem; padding: 4px 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px;" onclick="toggleSound()">
                         <span>Activar Sonido</span> <span id="sound-icon">🔇</span>
                     </button>
+
+                    <!-- Theme Switcher -->
+                    <button class="btn-theme-toggle" onclick="toggleTheme()">
+                        <span class="theme-toggle-icon">🌙</span> <span class="theme-toggle-text">Modo Oscuro</span>
+                    </button>
                     
                     <a href="{{ route('logout') }}" class="btn-logout" style="font-size: 0.8rem; padding: 4px 10px;">Cerrar Sesión</a>
                 </div>
