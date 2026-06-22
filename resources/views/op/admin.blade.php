@@ -698,6 +698,42 @@
         return tr;
     }
 
+    let pollingTimer = null;
+    let resumeTimer = null;
+    let isUserInteracting = false;
+    const POLLING_INTERVAL_MS = 5000;
+
+    function startPolling() {
+        stopPolling();
+        if (!isUserInteracting) {
+            pollingTimer = setTimeout(() => {
+                pollAdminUpdates();
+                startPolling();
+            }, POLLING_INTERVAL_MS);
+        }
+    }
+
+    function stopPolling() {
+        if (pollingTimer) {
+            clearTimeout(pollingTimer);
+            pollingTimer = null;
+        }
+    }
+
+    function handleUserInteraction() {
+        isUserInteracting = true;
+        stopPolling();
+        
+        if (resumeTimer) {
+            clearTimeout(resumeTimer);
+        }
+        
+        resumeTimer = setTimeout(() => {
+            isUserInteracting = false;
+            startPolling();
+        }, 10000); // Resume polling 10 seconds after last interaction
+    }
+
     function pollAdminUpdates() {
         fetch('/op/admin/updates', {
             headers: {
@@ -756,6 +792,11 @@
                     form.innerHTML = `<input type="hidden" name="_token" value="${token || ''}">`;
                     formsContainer.appendChild(form);
                 } else {
+                    // Skip updating if user has focus inside this row
+                    if (row.contains(document.activeElement)) {
+                        return;
+                    }
+
                     // Update existing row attributes
                     row.setAttribute('data-estado', orden.estado);
                     row.setAttribute('data-prioridad', orden.prioridad);
@@ -775,15 +816,15 @@
                         }
                     }
 
-                    // Update Leader input only if not focused
+                    // Update Leader input
                     const inputLider = row.querySelector('input[name="lider_produccion"]');
-                    if (inputLider && document.activeElement !== inputLider) {
+                    if (inputLider) {
                         inputLider.value = orden.lider_produccion || '';
                     }
 
-                    // Update Status select only if not focused
+                    // Update Status select
                     const selectStatus = row.querySelector('select[name="estado"]');
-                    if (selectStatus && document.activeElement !== selectStatus) {
+                    if (selectStatus) {
                         selectStatus.value = orden.estado;
                     }
 
@@ -805,8 +846,11 @@
                         progressFill.style.width = orden.avance + '%';
                     }
                 }
-                // Appending an existing or new child moves it to the end of tbody
-                tbody.appendChild(row);
+                
+                // Append or re-append to keep sorted order, but ONLY if it doesn't have focus
+                if (!row.contains(document.activeElement)) {
+                    tbody.appendChild(row);
+                }
 
                 // Keep selected/active class state
                 if (selectedOrderId && orden.id === selectedOrderId) {
@@ -839,8 +883,8 @@
         // Initial filters run
         applyAdminFilters();
 
-        // Start polling updates every 5 seconds
-        setInterval(pollAdminUpdates, 5000);
+        // Start polling updates
+        startPolling();
 
         // Event delegation for table row clicks to show details
         const tableBody = document.getElementById('admin-table-body');
@@ -857,6 +901,24 @@
                 const id = parseInt(row.getAttribute('data-id'));
                 selectOrder(id);
             });
+
+            // Listen to writing, selecting, keypress and focus inside the table to pause polling
+            tableBody.addEventListener('input', handleUserInteraction);
+            tableBody.addEventListener('change', handleUserInteraction);
+            tableBody.addEventListener('keydown', handleUserInteraction);
+            tableBody.addEventListener('focusin', handleUserInteraction);
+        }
+
+        // Also pause polling when using search or status filters
+        const searchInput = document.getElementById('search-op');
+        const filterStatus = document.getElementById('filter-status');
+        if (searchInput) {
+            searchInput.addEventListener('input', handleUserInteraction);
+            searchInput.addEventListener('focusin', handleUserInteraction);
+        }
+        if (filterStatus) {
+            filterStatus.addEventListener('change', handleUserInteraction);
+            filterStatus.addEventListener('focusin', handleUserInteraction);
         }
 
         // Event delegation for submit on forms inside forms-container
@@ -940,6 +1002,9 @@
                                 populateDetail(localOrder);
                             }
                         }
+
+                        // Pause polling for 10 seconds post-save
+                        handleUserInteraction();
 
                         applyAdminFilters();
                     } else {

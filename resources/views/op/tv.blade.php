@@ -20,7 +20,7 @@
                 </div>
             </div>
             
-            <div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 5px;">
+            <div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                     @php
                         $userRole = session('user_role');
@@ -44,11 +44,11 @@
                     
                     <a href="{{ route('logout') }}" class="btn-logout" style="font-size: 0.8rem; padding: 4px 10px;">Cerrar Sesión</a>
                 </div>
-                <div style="margin-top: 3px;">
-                    <span class="tv-meta" style="font-size: 0.9rem; font-weight: 600;">Fecha Actual: <span id="live-date" style="color: var(--text-white);">--/--/----</span></span>
-                    <span class="tv-meta" style="font-size: 0.9rem; font-weight: 600; margin-left: 12px;">Hora Actual: <span id="live-time" style="color: var(--green-lime);">--:--:--</span></span>
+                <div style="display: flex; align-items: center; gap: 12px; font-size: 0.85rem; color: var(--text-muted); flex-wrap: wrap; margin-top: 2px;">
+                    <span class="tv-meta" style="font-size: 0.85rem; margin: 0;">Fecha: <span id="live-date" style="color: var(--text-white); font-weight: 600;">--/--/----</span></span>
+                    <span class="tv-meta" style="font-size: 0.85rem; margin: 0; margin-left: 5px;">Hora: <span id="live-time" style="color: var(--green-lime); font-weight: 600;">--:--:--</span></span>
+                    <span class="tv-meta" style="font-size: 0.75rem; color: var(--text-muted); margin: 0; margin-left: 5px;">Última act: <span id="last-update-time" style="color: var(--text-white); font-weight: normal;">{{ date('d/m/Y H:i:s') }}</span></span>
                 </div>
-                <p class="tv-meta" style="font-size: 0.75rem; color: var(--text-muted); margin: 0;">Última actualización: <span id="last-update-time">{{ date('d/m/Y H:i:s') }}</span></p>
             </div>
         </div>
     </div>
@@ -886,8 +886,8 @@
             selectOrder(parseInt(savedId));
         }
 
-        // Start polling updates every 5 seconds
-        setInterval(pollUpdates, 5000);
+        // Start polling updates every 15 seconds
+        setInterval(pollUpdates, 15000);
     });
 </script>
 @endsection
