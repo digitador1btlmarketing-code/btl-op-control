@@ -16,6 +16,12 @@ else
     touch database/database.sqlite
 fi
 
+# Clear any cached configurations to ensure runtime env vars are respected
+echo "Clearing cached configurations..."
+php artisan config:clear
+php artisan route:clear
+php artisan view:clear
+
 # Run migrations to ensure schema is up-to-date at runtime
 echo "Running database migrations..."
 php artisan migrate --force

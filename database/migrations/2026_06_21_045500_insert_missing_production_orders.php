@@ -10,6 +10,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (app()->environment('production') || env('APP_ENV') === 'production') {
+            return;
+        }
+
         $orders = [
             [
                 'categoria' => 'Branding',

@@ -57,3 +57,25 @@ If you discover a security vulnerability within Laravel, please send an e-mail t
 ## License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+
+## Despliegue en Render con SQLite Persistente
+
+Para desplegar este proyecto en Render asegurando la persistencia de los datos, siga estos pasos:
+
+1. **Crear un Disco Persistente (Persistent Disk)**:
+   - En la configuración de su Web Service en Render, vaya a la sección **Disks**.
+   - Añada un nuevo disco con la siguiente configuración:
+     - **Name**: `database-storage` (o el nombre que prefiera)
+     - **Mount Path**: `/data`
+     - **Size**: El tamaño que considere necesario (ej. `1 GB` es más que suficiente para empezar).
+
+2. **Variables de Entorno (Environment Variables)**:
+   - Configure las siguientes variables en la sección **Env Groups** o directamente en el Web Service:
+     - `DB_CONNECTION`: `sqlite`
+     - `DB_DATABASE`: `/data/database.sqlite`
+     - `APP_ENV`: `production`
+
+3. **Migraciones y Datos**:
+   - Con esta configuración, el sistema creará automáticamente la carpeta `/data` y el archivo `/data/database.sqlite` en el primer arranque si no existen.
+   - Las migraciones se ejecutarán en cada despliegue de forma automática y segura.
+   - Los registros de prueba no se insertarán automáticamente al estar en entorno de producción.
