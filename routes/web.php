@@ -30,12 +30,22 @@ Route::middleware('access:tv_branding,tv_promocional,admin')->group(function () 
 // Temporary debug route for database verification in Render
 Route::get('/debug-db', function () {
     try {
+        $defaultConnection = config('database.default');
+        $driver = \Illuminate\Support\Facades\DB::connection()->getDriverName();
+        $envDbConnection = env('DB_CONNECTION');
+        $envHost = env('DB_HOST');
+        $envDatabase = env('DB_DATABASE');
+        
         $count = \App\Models\OrdenProduccion::count();
         $orders = \App\Models\OrdenProduccion::all();
-        $defaultConnection = config('database.default');
+        
         return response()->json([
             'success' => true,
-            'default_connection' => $defaultConnection,
+            'connection' => $defaultConnection,
+            'driver' => $driver,
+            'env_db_connection' => $envDbConnection,
+            'host' => $envHost,
+            'database' => $envDatabase,
             'total_records' => $count,
             'records' => $orders
         ]);
