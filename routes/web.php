@@ -32,12 +32,11 @@ Route::get('/debug-db', function () {
     try {
         $count = \App\Models\OrdenProduccion::count();
         $orders = \App\Models\OrdenProduccion::all();
-        $dbPath = config('database.connections.sqlite.database');
+        $defaultConnection = config('database.default');
         return response()->json([
             'success' => true,
+            'default_connection' => $defaultConnection,
             'total_records' => $count,
-            'database_file' => $dbPath,
-            'database_exists' => file_exists($dbPath),
             'records' => $orders
         ]);
     } catch (\Exception $e) {
