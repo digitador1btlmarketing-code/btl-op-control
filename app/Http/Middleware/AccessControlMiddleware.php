@@ -36,11 +36,11 @@ class AccessControlMiddleware
         if ($request->is('op/tv')) {
             $categoria = $request->query('categoria');
 
-            if ($userRole === 'tv_branding') {
+            if ($userRole === 'tv_branding' || $userRole === 'admin_branding') {
                 if ($categoria !== 'Branding') {
                     return redirect('/op/tv?categoria=Branding');
                 }
-            } elseif ($userRole === 'tv_promocional') {
+            } elseif ($userRole === 'tv_promocional' || $userRole === 'admin_promo') {
                 if ($categoria !== 'Promocional') {
                     return redirect('/op/tv?categoria=Promocional');
                 }

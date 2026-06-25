@@ -15,8 +15,10 @@ class AuthController extends Controller
         if (session()->has('user_role')) {
             $role = session('user_role');
             if ($role === 'ventas') {
-                return redirect('/op/nueva');
-            } elseif ($role === 'admin') {
+                return redirect('/op/mis-ordenes');
+            } elseif ($role === 'jefe_ventas') {
+                return redirect('/op/jefe-ventas');
+            } elseif (in_array($role, ['admin', 'admin_branding', 'admin_promo'])) {
                 return redirect('/op/admin');
             } elseif ($role === 'tv_branding') {
                 return redirect('/op/tv?categoria=Branding');
@@ -38,26 +40,37 @@ class AuthController extends Controller
             'codigo_acceso.required' => 'El código de acceso es obligatorio.',
         ]);
 
-        $codigo = trim($request->input('codigo_acceso'));
+        $codigo = strtoupper(trim($request->input('codigo_acceso')));
 
-        switch ($codigo) {
-            case 'VENTAS-PROD-2026':
-                session(['user_role' => 'ventas']);
-                return redirect('/op/nueva')->with('success', 'Acceso Ventas autorizado.');
-            case 'ADMIN-PROD-2026':
-                session(['user_role' => 'admin']);
+        // Check in database
+        $usuario = \Illuminate\Support\Facades\DB::table('usuarios_acceso')
+            ->where('codigo', $codigo)
+            ->where('activo', true)
+            ->first();
+
+        if ($usuario) {
+            session([
+                'user_role' => $usuario->rol,
+                'user_code' => $usuario->codigo,
+                'user_name' => $usuario->nombre . ($usuario->apellido ? ' ' . $usuario->apellido : ''),
+            ]);
+
+            if ($usuario->rol === 'ventas') {
+                return redirect('/op/mis-ordenes')->with('success', 'Acceso Ventas autorizado.');
+            } elseif ($usuario->rol === 'jefe_ventas') {
+                return redirect('/op/jefe-ventas')->with('success', 'Acceso Jefe de Ventas autorizado.');
+            } elseif (in_array($usuario->rol, ['admin', 'admin_branding', 'admin_promo'])) {
                 return redirect('/op/admin')->with('success', 'Acceso Administrador de Producción autorizado.');
-            case 'BRANDING-PROD-2026':
-                session(['user_role' => 'tv_branding']);
+            } elseif ($usuario->rol === 'tv_branding') {
                 return redirect('/op/tv?categoria=Branding')->with('success', 'Acceso Pantalla TV Branding autorizado.');
-            case 'PROMO-PROD-2026':
-                session(['user_role' => 'tv_promocional']);
+            } elseif ($usuario->rol === 'tv_promocional') {
                 return redirect('/op/tv?categoria=Promocional')->with('success', 'Acceso Pantalla TV Promocional autorizado.');
-            default:
-                return redirect()->back()
-                    ->withInput()
-                    ->with('error', 'El código de acceso ingresado no es válido.');
+            }
         }
+
+        return redirect()->back()
+            ->withInput()
+            ->with('error', 'El código de acceso ingresado no es válido o está inactivo.');
     }
 
     /**
@@ -65,7 +78,7 @@ class AuthController extends Controller
      */
     public function logout()
     {
-        session()->forget('user_role');
+        session()->forget(['user_role', 'user_code', 'user_name']);
         return redirect('/')->with('success', 'Sesión finalizada.');
     }
 }

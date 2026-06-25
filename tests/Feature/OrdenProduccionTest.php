@@ -37,8 +37,8 @@ class OrdenProduccionTest extends TestCase
         $this->assertNull(session('user_role'));
 
         // Sales code
-        $response = $this->post('/', ['codigo_acceso' => 'VENTAS-PROD-2026']);
-        $response->assertRedirect('/op/nueva');
+        $response = $this->post('/', ['codigo_acceso' => 'DAFNE-RAMIREZ-PROD-2026']);
+        $response->assertRedirect('/op/mis-ordenes');
         $this->assertEquals('ventas', session('user_role'));
 
         // Admin code
@@ -318,5 +318,140 @@ class OrdenProduccionTest extends TestCase
         $response->assertRedirect('/');
         $response->assertSessionHas('error', 'No tiene permisos para acceder a esta sección.');
         $this->assertEquals($initialCount + 1, OrdenProduccion::count());
+    }
+
+    /**
+     * Test Area Admins (Branding vs Promocional) category isolation.
+     */
+    public function test_area_admins_category_isolation(): void
+    {
+        // Create a branding and a promotional order
+        OrdenProduccion::create([
+            'categoria' => 'Branding',
+            'numero_op' => 'OP-BRAND-100',
+            'proyecto' => 'Branding Camp',
+            'presupuestista' => 'Presup',
+            'cliente' => 'Client',
+            'marca' => 'Brand',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '12:00:00',
+            'entregar_a' => 'Cliente',
+        ]);
+
+        OrdenProduccion::create([
+            'categoria' => 'Promocional',
+            'numero_op' => 'OP-PROMO-100',
+            'proyecto' => 'Promo Camp',
+            'presupuestista' => 'Presup',
+            'cliente' => 'Client',
+            'marca' => 'Promo',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '12:00:00',
+            'entregar_a' => 'Cliente',
+        ]);
+
+        // Login as ADMIN-BRANDING-2026
+        session([
+            'user_role' => 'admin_branding',
+            'user_code' => 'ADMIN-BRANDING-2026'
+        ]);
+
+        // Get admin updates
+        $response = $this->getJson('/op/admin/updates');
+        $response->assertStatus(200);
+        $data = $response->json();
+        
+        // Assert only Branding orders are visible
+        $this->assertGreaterThan(0, count($data['ordenes']));
+        foreach ($data['ordenes'] as $o) {
+            $this->assertEquals('Branding', $o['categoria']);
+        }
+
+        // Login as ADMIN-PROMO-2026
+        session([
+            'user_role' => 'admin_promo',
+            'user_code' => 'ADMIN-PROMO-2026'
+        ]);
+
+        // Get admin updates
+        $response = $this->getJson('/op/admin/updates');
+        $response->assertStatus(200);
+        $data = $response->json();
+
+        // Assert only Promocional orders are visible
+        $this->assertGreaterThan(0, count($data['ordenes']));
+        foreach ($data['ordenes'] as $o) {
+            $this->assertEquals('Promocional', $o['categoria']);
+        }
+    }
+
+    /**
+     * Test Jefe de Ventas commercial segmentation.
+     */
+    public function test_jefe_ventas_segmentation(): void
+    {
+        // Dafne belongs to Jefe Rizo (assigned via migration).
+        // Carlos belongs to Jefe Cajina (assigned via migration).
+
+        // Create OPs with different creators
+        OrdenProduccion::create([
+            'categoria' => 'Branding',
+            'numero_op' => 'OP-RIZO-VEND',
+            'proyecto' => 'Rizo Project',
+            'presupuestista' => 'Presup',
+            'cliente' => 'Client',
+            'marca' => 'Brand',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '12:00:00',
+            'entregar_a' => 'Cliente',
+            'creado_por_codigo' => 'DAFNE-RAMIREZ-PROD-2026',
+            'creado_por_nombre' => 'DAFNE',
+            'creado_por_rol' => 'ventas',
+        ]);
+
+        OrdenProduccion::create([
+            'categoria' => 'Promocional',
+            'numero_op' => 'OP-CAJINA-VEND',
+            'proyecto' => 'Cajina Project',
+            'presupuestista' => 'Presup',
+            'cliente' => 'Client',
+            'marca' => 'Promo',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '12:00:00',
+            'entregar_a' => 'Cliente',
+            'creado_por_codigo' => 'CARLOS-VARGAS-PROD-2026',
+            'creado_por_nombre' => 'CARLOS',
+            'creado_por_rol' => 'ventas',
+        ]);
+
+        // Login as JEFERIZO-PROD-2026 (Jefe Rizo)
+        session([
+            'user_role' => 'jefe_ventas',
+            'user_code' => 'JEFERIZO-PROD-2026'
+        ]);
+
+        // Get updates
+        $response = $this->getJson('/op/jefe-ventas/updates');
+        $response->assertStatus(200);
+        $data = $response->json();
+
+        // Should only see OPs from Rizo vendors
+        $this->assertCount(1, $data['ordenes']);
+        $this->assertEquals('OP-RIZO-VEND', $data['ordenes'][0]['numero_op']);
+
+        // Login as JEFECAJINA-PROD-2026 (Jefe Cajina)
+        session([
+            'user_role' => 'jefe_ventas',
+            'user_code' => 'JEFECAJINA-PROD-2026'
+        ]);
+
+        // Get updates
+        $response = $this->getJson('/op/jefe-ventas/updates');
+        $response->assertStatus(200);
+        $data = $response->json();
+
+        // Should only see OPs from Cajina vendors
+        $this->assertCount(1, $data['ordenes']);
+        $this->assertEquals('OP-CAJINA-VEND', $data['ordenes'][0]['numero_op']);
     }
 }

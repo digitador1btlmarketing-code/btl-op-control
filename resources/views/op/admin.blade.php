@@ -17,7 +17,9 @@
         <h2 style="font-size: 1.8rem; font-weight: 800;">Panel de Administración de Producción</h2>
         <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 5px;">Digitalización y Control del flujo operativo de BTL Marketing</p>
     </div>
-    <div style="display: flex; gap: 10px;">
+    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <button onclick="exportData('excel')" class="btn-secondary" style="width: auto; padding: 10px 20px; background: rgba(46, 204, 113, 0.15); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.3); font-weight: 600; cursor: pointer; border-radius: 8px;">📊 Exportar Excel</button>
+        <button onclick="exportData('pdf')" class="btn-secondary" style="width: auto; padding: 10px 20px; background: rgba(0, 210, 255, 0.15); color: var(--blue-bright); border: 1px solid rgba(0, 210, 255, 0.3); font-weight: 600; cursor: pointer; border-radius: 8px;">📄 Exportar PDF</button>
         <a href="{{ route('op.create') }}" class="btn-primary" style="width: auto; padding: 10px 20px;">+ Crear OP</a>
     </div>
 </div>
@@ -139,11 +141,13 @@
     </div>
     
     <!-- Category Tabs -->
+    @if(session('user_role') === 'admin')
     <div class="category-tabs-container">
         <button class="category-tab active" data-category="todos" onclick="selectCategoryTab('todos')">Todas</button>
         <button class="category-tab" data-category="Branding" onclick="selectCategoryTab('Branding')">Branding</button>
         <button class="category-tab" data-category="Promocional" onclick="selectCategoryTab('Promocional')">Promocional</button>
     </div>
+    @endif
     
     <div class="table-responsive">
         <table>
@@ -324,6 +328,27 @@
             </div>
         </div>
     </div>
+    
+    <!-- Date change request section in details -->
+    <div id="detail-date-change-section" style="margin-top: 15px; border-top: 1px solid var(--border-glass); padding-top: 15px;">
+        <h4 style="font-size: 1.05rem; color: var(--blue-bright); margin-bottom: 10px; font-weight: 700;">Solicitud de Cambio de Fecha</h4>
+        <div id="detail-date-change-status" style="margin-bottom: 10px; font-size: 0.9rem; line-height: 1.4;"></div>
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <a id="btn-download-pdf-op" href="#" class="btn-secondary" style="width: auto; padding: 8px 16px; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; background: rgba(0, 210, 255, 0.1); border-color: rgba(0, 210, 255, 0.2); color: var(--blue-bright);">
+                📄 Descargar PDF OP
+            </a>
+            <button id="btn-request-date-change" onclick="openRequestDateChangeModal()" class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 0.85rem; display: none;">
+                Solicitar cambio de fecha
+            </button>
+        </div>
+    </div>
+
+    <!-- Timeline of events (History) -->
+    <div id="detail-history-section" style="margin-top: 15px; border-top: 1px solid var(--border-glass); padding-top: 15px;">
+        <button id="btn-show-history" onclick="openHistoryModal()" class="filter-btn" style="width: auto; padding: 8px 16px; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; background: rgba(255, 255, 255, 0.05); border-color: var(--border-glass); color: var(--text-white);">
+            📜 Ver historial
+        </button>
+    </div>
 </div>
 
 @if(session('user_role') === 'admin')
@@ -384,15 +409,254 @@
         </div>
     </div>
 </div>
+<!-- Request Date Change Modal -->
+<div id="request-date-change-modal" class="custom-modal-overlay hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-modal-overlay); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 10000; transition: var(--transition);">
+    <div class="card" style="max-width: 500px; width: 90%; border-color: var(--border-glass); box-shadow: var(--card-shadow); padding: 30px; margin-bottom: 0; text-align: left;">
+        <h3 style="font-size: 1.3rem; font-weight: 800; color: var(--blue-bright); margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
+            📅 Solicitar Cambio de Fecha
+        </h3>
+        
+        <form id="request-date-change-form" onsubmit="submitDateChangeRequest(event)">
+            @csrf
+            <input type="hidden" name="orden_produccion_id" id="change-op-id">
+            
+            <div class="grid-2" style="margin-bottom: 15px;">
+                <div class="form-group">
+                    <label style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase;">Fecha Actual</label>
+                    <input type="text" id="change-fecha-actual" class="form-control" disabled style="background: rgba(255,255,255,0.05); text-align: center;">
+                </div>
+                <div class="form-group">
+                    <label style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase;">Hora Actual</label>
+                    <input type="text" id="change-hora-actual" class="form-control" disabled style="background: rgba(255,255,255,0.05); text-align: center;">
+                </div>
+            </div>
+            
+            <div class="grid-2" style="margin-bottom: 15px;">
+                <div class="form-group">
+                    <label for="fecha_solicitada" style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase;">Nueva Fecha *</label>
+                    <input type="date" name="fecha_solicitada" id="fecha_solicitada" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="hora_solicitada" style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase;">Nueva Hora *</label>
+                    <input type="time" name="hora_solicitada" id="hora_solicitada" class="form-control" required>
+                </div>
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 20px;">
+                <label for="razon_solicitud" style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase;">Razón del Cambio *</label>
+                <textarea name="razon_solicitud" id="razon_solicitud" class="form-control" rows="3" placeholder="Escriba la razón de forma detallada..." required style="resize: none;"></textarea>
+            </div>
+            
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button type="button" onclick="closeRequestDateChangeModal()" class="filter-btn" style="padding: 10px 20px; width: auto; font-weight: 600;">Cancelar</button>
+                <button type="submit" class="btn-primary" style="width: auto; padding: 10px 25px; font-weight: 700;">Enviar Solicitud</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- SECTION: GESTION DE TODOS LOS USUARIOS (Solo para Master Admin) -->
+<div class="card" style="margin-top: 25px; margin-bottom: 25px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 15px;">
+        <h3 style="font-size: 1.25rem; font-weight: 800; margin: 0;">Módulo: Control de Usuarios y Accesos</h3>
+        <button onclick="openNewUserModal()" class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 0.85rem;">+ Crear Usuario</button>
+    </div>
+    <div style="overflow-x: auto;">
+        <table class="table-tv" style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+            <thead>
+                <tr>
+                    <th>Código de Acceso</th>
+                    <th>Nombre</th>
+                    <th>Apellido</th>
+                    <th>Rol / Permisos</th>
+                    <th>Estado</th>
+                    <th>OP Creadas</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse($usuarios as $user)
+                    <tr>
+                        <td><strong style="color: var(--blue-bright);">{{ $user->codigo }}</strong></td>
+                        <td>{{ $user->nombre }}</td>
+                        <td>{{ $user->apellido ?: '-' }}</td>
+                        <td>
+                            <span class="badge 
+                                @if($user->rol === 'admin') badge-urgente
+                                @elseif($user->rol === 'jefe_ventas') badge-normal
+                                @elseif(in_array($user->rol, ['admin_branding', 'admin_promo'])) badge-proxima
+                                @else badge-normal @endif">
+                                {{ strtoupper(str_replace('_', ' ', $user->rol)) }}
+                            </span>
+                        </td>
+                        <td>
+                            @if($user->activo)
+                                <span class="badge badge-terminado">Activo</span>
+                            @else
+                                <span class="badge badge-cancelado">Inactivo</span>
+                            @endif
+                        </td>
+                        <td><span class="badge badge-normal" style="font-weight: bold;">{{ $user->op_count }}</span></td>
+                        <td>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <button onclick="openEditUserModal({{ $user->id }}, '{{ $user->nombre }}', '{{ $user->apellido ?: '' }}', '{{ $user->rol }}', {{ $user->op_count }}, '{{ $user->jefe_codigo ?: '' }}')" class="btn-save-inline" style="padding: 4px 10px; font-size: 0.8rem;">
+                                    Editar
+                                </button>
+                                
+                                <form action="{{ route('jefe.usuarios.toggle', $user->id) }}" method="POST" style="margin:0;">
+                                    @csrf
+                                    <button type="submit" class="btn-save-inline" style="padding: 4px 10px; font-size: 0.8rem; background: rgba(255,255,255,0.05); border-color: var(--border-glass); color: var(--text-white);">
+                                        {{ $user->activo ? 'Desactivar' : 'Activar' }}
+                                    </button>
+                                </form>
+                                
+                                @if($user->op_count === 0 && $user->codigo !== 'ADMIN-PROD-2026')
+                                    <form action="{{ route('jefe.usuarios.delete', $user->id) }}" method="POST" style="margin:0;" onsubmit="return confirm('¿Está seguro de eliminar este usuario?')">
+                                        @csrf
+                                        <button type="submit" class="btn-logout" style="padding: 4px 10px; font-size: 0.8rem; cursor:pointer;">
+                                            Eliminar
+                                        </button>
+                                    </form>
+                                @else
+                                    <span style="font-size: 0.8rem; color: var(--text-muted); font-style: italic;">No de baja</span>
+                                @endif
+                            </div>
+                        </td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 25px;">No hay usuarios registrados.</td>
+                    </tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- MODAL: NUEVO USUARIO (Master Admin) -->
+<div id="new-user-modal" class="custom-modal-overlay hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-modal-overlay); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 10000; transition: var(--transition);">
+    <div class="card" style="max-width: 450px; width: 90%; border-color: var(--border-glass); box-shadow: var(--card-shadow); padding: 30px; margin-bottom: 0;">
+        <h3 style="font-size: 1.3rem; font-weight: 800; color: var(--blue-bright); margin-bottom: 20px;">
+            👤 Registrar Nuevo Usuario
+        </h3>
+        
+        <form action="{{ route('jefe.usuarios.store') }}" method="POST">
+            @csrf
+            
+            <div class="form-group" style="text-align: left; margin-bottom: 15px;">
+                <label for="new-user-rol">Rol / Permisos *</label>
+                <select name="rol" id="new-user-rol" class="form-control" required style="cursor: pointer;">
+                    <option value="ventas">Usuario de Ventas (Vendedor)</option>
+                    <option value="jefe_ventas">Jefe de Ventas</option>
+                    <option value="admin_branding">Administrador de Branding</option>
+                    <option value="admin_promo">Administrador de Promocional</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="new-user-jefe-group" style="text-align: left; margin-bottom: 15px;">
+                <label for="new-user-jefe">Jefe de Ventas Responsable *</label>
+                <select name="jefe_codigo" id="new-user-jefe" class="form-control" style="cursor: pointer;">
+                    <option value="JEFERIZO-PROD-2026">JEFE RIZO (JEFERIZO-PROD-2026)</option>
+                    <option value="JEFECAJINA-PROD-2026">JEFE CAJINA (JEFECAJINA-PROD-2026)</option>
+                </select>
+            </div>
+            
+            <div class="form-group" style="text-align: left; margin-bottom: 15px;">
+                <label for="new-user-nombre">Nombre *</label>
+                <input type="text" name="nombre" id="new-user-nombre" class="form-control" required placeholder="Ej: JUAN">
+            </div>
+            
+            <div class="form-group" style="text-align: left; margin-bottom: 20px;">
+                <label for="new-user-apellido">Apellido (opcional para admins) *</label>
+                <input type="text" name="apellido" id="new-user-apellido" class="form-control" required placeholder="Ej: PEREZ">
+            </div>
+            
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button type="button" onclick="closeNewUserModal()" class="filter-btn" style="padding: 10px 20px; width: auto; font-weight: 600;">Cancelar</button>
+                <button type="submit" class="btn-primary" style="width: auto; padding: 10px 25px; font-weight: 700;">Crear Usuario</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL: EDITAR USUARIO (Master Admin) -->
+<div id="edit-user-modal" class="custom-modal-overlay hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-modal-overlay); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 10000; transition: var(--transition);">
+    <div class="card" style="max-width: 450px; width: 90%; border-color: var(--border-glass); box-shadow: var(--card-shadow); padding: 30px; margin-bottom: 0;">
+        <h3 style="font-size: 1.3rem; font-weight: 800; color: var(--blue-bright); margin-bottom: 15px;">
+            ✏️ Editar Usuario
+        </h3>
+        
+        <p id="edit-user-warning" style="font-size: 0.8rem; color: var(--priority-proxima); margin-bottom: 20px; line-height: 1.4; display: none;">
+            ⚠️ Este usuario ya tiene OPs creadas. El código de acceso y su rol NO cambiarán para mantener la trazabilidad.
+        </p>
+        
+        <form id="edit-user-form" method="POST">
+            @csrf
+            
+            <div class="form-group" style="text-align: left; margin-bottom: 15px;">
+                <label for="edit-user-rol">Rol / Permisos *</label>
+                <select name="rol" id="edit-user-rol" class="form-control" required style="cursor: pointer;">
+                    <option value="ventas">Usuario de Ventas (Vendedor)</option>
+                    <option value="jefe_ventas">Jefe de Ventas</option>
+                    <option value="admin_branding">Administrador de Branding</option>
+                    <option value="admin_promo">Administrador de Promocional</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="edit-user-jefe-group" style="text-align: left; margin-bottom: 15px;">
+                <label for="edit-user-jefe">Jefe de Ventas Responsable *</label>
+                <select name="jefe_codigo" id="edit-user-jefe" class="form-control" style="cursor: pointer;">
+                    <option value="JEFERIZO-PROD-2026">JEFE RIZO (JEFERIZO-PROD-2026)</option>
+                    <option value="JEFECAJINA-PROD-2026">JEFE CAJINA (JEFECAJINA-PROD-2026)</option>
+                </select>
+            </div>
+            
+            <div class="form-group" style="text-align: left; margin-bottom: 15px;">
+                <label for="edit-user-nombre">Nombre *</label>
+                <input type="text" name="nombre" id="edit-user-nombre" class="form-control" required>
+            </div>
+            
+            <div class="form-group" style="text-align: left; margin-bottom: 20px;">
+                <label for="edit-user-apellido">Apellido *</label>
+                <input type="text" name="apellido" id="edit-user-apellido" class="form-control" required>
+            </div>
+            
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button type="button" onclick="closeEditUserModal()" class="filter-btn" style="padding: 10px 20px; width: auto; font-weight: 600;">Cancelar</button>
+                <button type="submit" class="btn-primary" style="width: auto; padding: 10px 25px; font-weight: 700;">Guardar Cambios</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- History Modal -->
+<div id="history-modal" class="custom-modal-overlay hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-modal-overlay); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 10000; transition: var(--transition);">
+    <div class="card" style="max-width: 650px; width: 90%; border-color: var(--border-glass); box-shadow: var(--card-shadow); padding: 30px; margin-bottom: 0; text-align: left; position: relative;">
+        <button onclick="closeHistoryModal()" class="btn-logout" style="position: absolute; top: 15px; right: 20px; font-size: 0.8rem; padding: 4px 10px; cursor: pointer; background: rgba(255, 51, 102, 0.15); border-color: rgba(255, 51, 102, 0.3);">Cerrar historial</button>
+        
+        <h3 style="font-size: 1.3rem; font-weight: 800; color: var(--green-lime); margin-top: 0; margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
+            📜 Historial de OP: <span id="history-modal-op-title" style="color: var(--blue-bright);"></span>
+        </h3>
+        
+        <div id="modal-history-timeline" style="max-height: 400px; overflow-y: auto; font-size: 0.9rem; line-height: 1.5; color: var(--text-white); background: rgba(255, 255, 255, 0.02); padding: 15px; border-radius: 8px; border: 1px solid var(--border-glass); margin-bottom: 20px;">
+            <em style="color: var(--text-muted);">Cargando historial...</em>
+        </div>
+        
+        <div style="display: flex; justify-content: flex-end;">
+            <button onclick="closeHistoryModal()" class="filter-btn" style="padding: 10px 20px; font-weight: 600;">Cerrar</button>
+        </div>
+    </div>
+</div>
 @endif
 @endsection
 
 @section('scripts')
 <script>
-    let activeCategory = 'todos';
+    let activeCategory = '{{ session('user_role') === 'admin_branding' ? 'Branding' : (session('user_role') === 'admin_promo' ? 'Promocional' : 'todos') }}';
     let selectedOrderId = null;
     let allOrders = @json($ordenes);
     const storageBaseUrl = "/storage";
+    let notifiedResolutions = new Set();
 
     function selectCategoryTab(category) {
         activeCategory = category;
@@ -565,9 +829,14 @@
         
         const briefDiv = document.getElementById('detail-brief');
         if (order.brief) {
-            briefDiv.innerHTML = `<a href="${storageBaseUrl}/${order.brief}" target="_blank" class="btn-view-brief" style="background: rgba(0, 210, 255, 0.15); color: var(--blue-bright); border: 1px solid rgba(0, 210, 255, 0.3); padding: 4px 10px; border-radius: 6px; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 5px;">Ver Brief</a>`;
+            briefDiv.innerHTML = `<a href="/op/descargar-brief/${order.id}" target="_blank" class="btn-view-brief" style="background: rgba(0, 210, 255, 0.15); color: var(--blue-bright); border: 1px solid rgba(0, 210, 255, 0.3); padding: 4px 10px; border-radius: 6px; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 5px;">Ver Brief</a>`;
         } else {
             briefDiv.textContent = '-';
+        }
+
+        const pdfBtn = document.getElementById('btn-download-pdf-op');
+        if (pdfBtn) {
+            pdfBtn.href = `/op/exportar/detalle/${order.id}`;
         }
 
         const instSection = document.getElementById('detail-installation-section');
@@ -599,6 +868,28 @@
         } else {
             instSection.classList.add('hidden');
         }
+
+        // Date Change Request status
+        const statusDiv = document.getElementById('detail-date-change-status');
+        const btnChange = document.getElementById('btn-request-date-change');
+        if (order.solicitud_pendiente) {
+            const req = order.solicitud_pendiente;
+            const newDate = req.fecha_solicitada.split('-').reverse().join('/');
+            const newTime = req.hora_solicitada.substring(0, 5);
+            statusDiv.innerHTML = `
+                <div style="background: rgba(243, 166, 59, 0.1); border: 1px solid rgba(243, 166, 59, 0.3); padding: 12px; border-radius: 8px; color: var(--state-pendiente);">
+                    <strong style="display: block; margin-bottom: 5px;">⚠️ Solicitud Pendiente</strong>
+                    Nueva fecha: <strong>${newDate} ${newTime} hrs</strong><br>
+                    Razón: <span style="font-style: italic;">"${req.razon_solicitud}"</span>
+                </div>
+            `;
+            if (btnChange) btnChange.style.display = 'none';
+        } else {
+            statusDiv.innerHTML = '';
+            if (btnChange) btnChange.style.display = 'inline-block';
+        }
+
+        // Timeline of history loading is now handled inside the collapsible history modal
     }
 
     function createRowElement(orden) {
@@ -875,6 +1166,24 @@
 
             // Re-apply filters
             applyAdminFilters();
+
+            // Process recent resolutions to show toasts
+            if (data.recent_resolutions && data.recent_resolutions.length > 0) {
+                data.recent_resolutions.forEach(res => {
+                    if (!notifiedResolutions.has(res.id)) {
+                        notifiedResolutions.add(res.id);
+                        
+                        let message = '';
+                        if (res.estado_solicitud === 'Aprobada') {
+                            message = `Aprobado cambio de fecha para ${res.numero_op} a ${res.fecha_solicitada} ${res.hora_solicitada}.`;
+                            showToast(message, 'success');
+                        } else if (res.estado_solicitud === 'Rechazada') {
+                            message = `Rechazado cambio de fecha para ${res.numero_op}. Razón: ${res.razon_rechazo}`;
+                            showToast(message, 'error');
+                        }
+                    }
+                });
+            }
         })
         .catch(err => console.log("AJAX updates polling error:", err));
     }
@@ -1073,5 +1382,260 @@
         closeMaintenanceModal();
         openResetModal();
     }
+
+    function openRequestDateChangeModal() {
+        if (!selectedOrderId) return;
+        const order = allOrders.find(o => o.id === selectedOrderId);
+        if (!order) return;
+
+        const opIdInput = document.getElementById('change-op-id');
+        if (opIdInput) opIdInput.value = order.id;
+        
+        let formattedDate = '-';
+        let formattedTime = '-';
+        if (order.fecha_entrega) {
+            const rawDate = order.fecha_entrega.split('-');
+            formattedDate = `${rawDate[2]}/${rawDate[1]}/${rawDate[0]}`;
+        }
+        if (order.hora_entrega) {
+            formattedTime = order.hora_entrega.substring(0, 5);
+        }
+        
+        const fechaActInput = document.getElementById('change-fecha-actual');
+        if (fechaActInput) fechaActInput.value = formattedDate;
+        
+        const horaActInput = document.getElementById('change-hora-actual');
+        if (horaActInput) horaActInput.value = formattedTime;
+        
+        const fechaSolInput = document.getElementById('fecha_solicitada');
+        if (fechaSolInput) fechaSolInput.value = order.fecha_entrega;
+        
+        const horaSolInput = document.getElementById('hora_solicitada');
+        if (horaSolInput) horaSolInput.value = order.hora_entrega.substring(0, 5);
+        
+        const razonInput = document.getElementById('razon_solicitud');
+        if (razonInput) razonInput.value = '';
+
+        const modal = document.getElementById('request-date-change-modal');
+        if (modal) modal.classList.remove('hidden');
+    }
+
+    function closeRequestDateChangeModal() {
+        const modal = document.getElementById('request-date-change-modal');
+        if (modal) modal.classList.add('hidden');
+    }
+
+    function submitDateChangeRequest(event) {
+        event.preventDefault();
+        const form = event.target;
+        const formData = new FormData(form);
+
+        fetch('{{ route("op.solicitar_cambio_fecha") }}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
+        })
+        .then(res => {
+            if (!res.ok) {
+                return res.json().then(data => { throw new Error(data.message || 'Error en servidor') });
+            }
+            return res.json();
+        })
+        .then(data => {
+            if (data.success) {
+                showToast(data.message, 'success');
+                closeRequestDateChangeModal();
+                pollAdminUpdates(); // Fetch and re-render updates
+            } else {
+                showToast(data.message || 'Error al enviar la solicitud', 'error');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            showToast(err.message || 'Error al procesar la solicitud.', 'error');
+        });
+    }
+    function exportData(type) {
+        const searchVal = document.getElementById('search-op')?.value || '';
+        const filterVal = document.getElementById('filter-status')?.value || 'activas';
+        const categoryVal = activeCategory || 'todos';
+        const url = `/op/exportar/${type}?search=${encodeURIComponent(searchVal)}&status=${encodeURIComponent(filterVal)}&category=${encodeURIComponent(categoryVal)}`;
+        window.location.href = url;
+    }
+
+    // Modal: Collapsible History functions
+    function openHistoryModal() {
+        if (!selectedOrderId) return;
+        const order = allOrders.find(o => o.id === selectedOrderId);
+        if (!order) return;
+        
+        document.getElementById('history-modal-op-title').textContent = order.numero_op;
+        const timeline = document.getElementById('modal-history-timeline');
+        timeline.innerHTML = '<em style="color: var(--text-muted); text-align: center; display: block; padding: 20px;">Cargando historial...</em>';
+        
+        document.getElementById('history-modal').classList.remove('hidden');
+        
+        fetch('/op/historial/' + order.id)
+            .then(res => {
+                if (!res.ok) throw new Error('Error al obtener el historial');
+                return res.json();
+            })
+            .then(history => {
+                if (history.length === 0) {
+                    timeline.innerHTML = '<em style="color: var(--text-muted); text-align: center; display: block; padding: 20px;">No hay eventos registrados para esta orden.</em>';
+                    return;
+                }
+                
+                let tableHtml = `
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+                            <thead>
+                                <tr style="border-bottom: 2px solid var(--border-glass);">
+                                    <th style="padding: 10px; color: var(--blue-bright); font-weight: 700; width: 18%;">Fecha</th>
+                                    <th style="padding: 10px; color: var(--blue-bright); font-weight: 700; width: 12%;">Hora</th>
+                                    <th style="padding: 10px; color: var(--blue-bright); font-weight: 700; width: 25%;">Usuario</th>
+                                    <th style="padding: 10px; color: var(--blue-bright); font-weight: 700; width: 45%;">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+                
+                history.forEach(item => {
+                    const dateObj = new Date(item.created_at);
+                    const dateStr = String(dateObj.getDate()).padStart(2, '0') + '/' +
+                                  String(dateObj.getMonth() + 1).padStart(2, '0') + '/' +
+                                  dateObj.getFullYear();
+                    const timeStr = String(dateObj.getHours()).padStart(2, '0') + ':' +
+                                  String(dateObj.getMinutes()).padStart(2, '0');
+                                  
+                    const userStr = `${item.realizado_por_nombre}<br><small style="color: var(--text-muted);">${item.realizado_por_codigo}</small>`;
+                    
+                    tableHtml += `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <td style="padding: 10px; font-weight: 600;">${dateStr}</td>
+                            <td style="padding: 10px; color: var(--text-muted);">${timeStr}</td>
+                            <td style="padding: 10px; white-space: normal;">${userStr}</td>
+                            <td style="padding: 10px; white-space: normal; color: var(--text-white);">${item.descripcion}</td>
+                        </tr>
+                    `;
+                });
+                
+                tableHtml += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                
+                timeline.innerHTML = tableHtml;
+            })
+            .catch(err => {
+                console.error("Error al cargar historial:", err);
+                timeline.innerHTML = '<em style="color: var(--priority-urgente); text-align: center; display: block; padding: 20px;">Error al cargar el historial.</em>';
+            });
+    }
+
+    function closeHistoryModal() {
+        document.getElementById('history-modal').classList.add('hidden');
+    }
+
+    // Modals: Master Admin user management panel functions
+    function openNewUserModal() {
+        const modal = document.getElementById('new-user-modal');
+        if (modal) modal.classList.remove('hidden');
+    }
+
+    function closeNewUserModal() {
+        const modal = document.getElementById('new-user-modal');
+        if (modal) modal.classList.add('hidden');
+    }
+
+    function openEditUserModal(id, nombre, apellido, rol, count, jefeCodigo) {
+        const form = document.getElementById('edit-user-form');
+        if (!form) return;
+        
+        form.action = `/jefe/usuarios/update/${id}`;
+        document.getElementById('edit-user-nombre').value = nombre;
+        document.getElementById('edit-user-apellido').value = apellido;
+        
+        const selectRol = document.getElementById('edit-user-rol');
+        if (selectRol) {
+            selectRol.value = rol;
+            // Disable role change if the user has OPs to maintain clean access records
+            if (count > 0 || rol === 'admin') {
+                selectRol.disabled = true;
+            } else {
+                selectRol.disabled = false;
+            }
+        }
+
+        const selectJefe = document.getElementById('edit-user-jefe');
+        if (selectJefe) {
+            selectJefe.value = jefeCodigo || 'JEFERIZO-PROD-2026';
+        }
+
+        const editUserRol = document.getElementById('edit-user-rol');
+        const editUserJefeGroup = document.getElementById('edit-user-jefe-group');
+        if (editUserRol && editUserJefeGroup) {
+            if (editUserRol.value === 'ventas') {
+                editUserJefeGroup.style.display = 'block';
+                if (selectJefe) selectJefe.required = true;
+            } else {
+                editUserJefeGroup.style.display = 'none';
+                if (selectJefe) selectJefe.required = false;
+            }
+        }
+        
+        const warning = document.getElementById('edit-user-warning');
+        if (warning) {
+            warning.style.display = count > 0 ? 'block' : 'none';
+        }
+
+        const modal = document.getElementById('edit-user-modal');
+        if (modal) modal.classList.remove('hidden');
+    }
+
+    function closeEditUserModal() {
+        const modal = document.getElementById('edit-user-modal');
+        if (modal) modal.classList.add('hidden');
+    }
+
+    // Dynamic role listener to show/hide Chief selector in creation/edit forms
+    document.addEventListener('DOMContentLoaded', function() {
+        const newUserRol = document.getElementById('new-user-rol');
+        const newUserJefeGroup = document.getElementById('new-user-jefe-group');
+        const newUserJefe = document.getElementById('new-user-jefe');
+        if (newUserRol && newUserJefeGroup) {
+            const toggleNewJefeGroup = () => {
+                if (newUserRol.value === 'ventas') {
+                    newUserJefeGroup.style.display = 'block';
+                    if (newUserJefe) newUserJefe.required = true;
+                } else {
+                    newUserJefeGroup.style.display = 'none';
+                    if (newUserJefe) newUserJefe.required = false;
+                }
+            };
+            newUserRol.addEventListener('change', toggleNewJefeGroup);
+            toggleNewJefeGroup();
+        }
+
+        const editUserRol = document.getElementById('edit-user-rol');
+        const editUserJefeGroup = document.getElementById('edit-user-jefe-group');
+        const editUserJefe = document.getElementById('edit-user-jefe');
+        if (editUserRol && editUserJefeGroup) {
+            const toggleEditJefeGroup = () => {
+                if (editUserRol.value === 'ventas') {
+                    editUserJefeGroup.style.display = 'block';
+                    if (editUserJefe) editUserJefe.required = true;
+                } else {
+                    editUserJefeGroup.style.display = 'none';
+                    if (editUserJefe) editUserJefe.required = false;
+                }
+            };
+            editUserRol.addEventListener('change', toggleEditJefeGroup);
+        }
+    });
 </script>
 @endsection

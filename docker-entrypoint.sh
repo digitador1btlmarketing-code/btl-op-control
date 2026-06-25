@@ -22,6 +22,10 @@ php artisan view:clear
 echo "Running database migrations..."
 php artisan migrate --force
 
+# Create public storage symlink if it does not exist
+echo "Linking public storage..."
+php artisan storage:link || true
+
 # Start the Laravel serve command
 echo "Starting Laravel server..."
 exec php artisan serve --host=0.0.0.0 --port="${PORT:-10000}"

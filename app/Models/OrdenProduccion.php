@@ -28,6 +28,9 @@ class OrdenProduccion extends Model
         'lider_produccion',
         'estado',
         'avance',
+        'creado_por_codigo',
+        'creado_por_nombre',
+        'creado_por_rol',
     ];
 
     protected $attributes = [
@@ -110,5 +113,29 @@ class OrdenProduccion extends Model
             return false;
         }
         return $dias < 3;
+    }
+
+    /**
+     * Get the history records for the order.
+     */
+    public function historial()
+    {
+        return $this->hasMany(HistorialOrden::class, 'orden_produccion_id')->orderBy('created_at', 'desc');
+    }
+
+    /**
+     * Get the date change requests for the order.
+     */
+    public function solicitudesCambio()
+    {
+        return $this->hasMany(SolicitudCambioFecha::class, 'orden_produccion_id');
+    }
+
+    /**
+     * Get the active pending date change request.
+     */
+    public function solicitudPendiente()
+    {
+        return $this->hasOne(SolicitudCambioFecha::class, 'orden_produccion_id')->where('estado_solicitud', 'Pendiente');
     }
 }

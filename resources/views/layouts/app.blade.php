@@ -48,12 +48,16 @@
                     <span class="theme-toggle-icon">🌙</span> <span class="theme-toggle-text">Modo Oscuro</span>
                 </button>
                 
-                @if(session('user_role') === 'admin' || session('user_role') === 'ventas')
+                @if(in_array(session('user_role'), ['admin', 'ventas', 'jefe_ventas']))
                     <a href="{{ route('op.create') }}" class="btn-view-brief" style="margin-right: 10px;">+ Nueva OP</a>
                 @endif
                 
                 @if(session('user_role') === 'admin')
                     <a href="{{ route('op.admin') }}" class="btn-view-brief" style="margin-right: 10px;">Panel Admin</a>
+                @elseif(session('user_role') === 'jefe_ventas')
+                    <a href="{{ route('op.jefe_ventas') }}" class="btn-view-brief" style="margin-right: 10px;">Panel Jefe de Ventas</a>
+                @elseif(session('user_role') === 'ventas')
+                    <a href="{{ route('op.mis_ordenes') }}" class="btn-view-brief" style="margin-right: 10px;">Panel Mis Órdenes</a>
                 @endif
                 
                 <a href="{{ route('logout') }}" class="btn-logout">Cerrar Sesión</a>
