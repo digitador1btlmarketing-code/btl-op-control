@@ -329,8 +329,6 @@
     </div>
 </div>
 
-<!-- Toast Notifications Container -->
-<div id="toast-container"></div>
 @endsection
 
 @section('scripts')
@@ -343,82 +341,7 @@
     const storageBaseUrl = "/storage";
     let selectedOrderId = null;
     let updatedOrderIds = [];
-    let isSoundEnabled = localStorage.getItem('tv_sound_enabled') === 'true';
 
-    // Sound alert audio context / player
-    const alertAudio = new Audio("/sounds/alert.mp3");
-    
-    function playAlertSound() {
-        alertAudio.currentTime = 0;
-        alertAudio.play().catch(err => {
-            console.log("Audio playback blocked by browser or missing asset:", err);
-            // Synth beep fallback
-            try {
-                const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                const osc = ctx.createOscillator();
-                const gain = ctx.createGain();
-                osc.connect(gain);
-                gain.connect(ctx.destination);
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(880, ctx.currentTime);
-                gain.gain.setValueAtTime(0.3, ctx.currentTime);
-                osc.start();
-                osc.stop(ctx.currentTime + 0.35);
-            } catch (e) {
-                console.log("Synthesizer fallback failed:", e);
-            }
-        });
-    }
-
-    function updateSoundButtonUI() {
-        const btn = document.getElementById('btn-sound-toggle');
-        const icon = document.getElementById('sound-icon');
-        if (btn && icon) {
-            if (isSoundEnabled) {
-                btn.style.background = 'rgba(0, 242, 195, 0.15)';
-                btn.style.borderColor = 'rgba(0, 242, 195, 0.4)';
-                btn.style.color = 'var(--green-lime)';
-                btn.querySelector('span').textContent = 'Sonido Activo';
-                icon.textContent = '🔊';
-            } else {
-                btn.style.background = '';
-                btn.style.borderColor = '';
-                btn.style.color = '';
-                btn.querySelector('span').textContent = 'Activar Sonido';
-                icon.textContent = '🔇';
-            }
-        }
-    }
-
-    function toggleSound() {
-        isSoundEnabled = !isSoundEnabled;
-        localStorage.setItem('tv_sound_enabled', isSoundEnabled);
-        updateSoundButtonUI();
-        if (isSoundEnabled) {
-            playAlertSound();
-        }
-    }
-
-    // Dynamic custom toasts
-    function showCustomToast(message, type = 'info', icon = '🔔') {
-        const container = document.getElementById('toast-container');
-        if (!container) return;
-
-        const toast = document.createElement('div');
-        toast.className = `custom-toast toast-${type}`;
-        toast.innerHTML = `
-            <span class="toast-icon">${icon}</span>
-            <span class="toast-message">${message}</span>
-        `;
-        container.appendChild(toast);
-
-        setTimeout(() => {
-            toast.classList.add('hide');
-            setTimeout(() => {
-                toast.remove();
-            }, 600);
-        }, 7500); // 6 to 8 seconds duration
-    }
 
     // JS-based row selection and toggle detail panel
     function selectOrder(id) {
@@ -745,49 +668,23 @@
         .then(data => {
             const newOrders = data.ordenes;
             const kpis = data.kpis;
-
             let notify = false;
             let tempUpdatedIds = [];
 
             newOrders.forEach(newOp => {
                 const oldOp = currentOrders.find(o => o.id === newOp.id);
                 if (!oldOp) {
-                    // Trigger new order toast notification
                     notify = true;
                     tempUpdatedIds.push(newOp.id);
-                    showCustomToast(`Nueva OP recibida: ${newOp.numero_op}`, 'success', '🔔');
                 } else {
                     let changed = false;
-                    let changeMsgs = [];
-                    let type = 'info';
-                    let icon = '⚠️';
 
                     if (oldOp.estado !== newOp.estado) {
                         changed = true;
-                        if (newOp.estado === 'Terminado') {
-                            changeMsgs.push(`${newOp.numero_op} fue completada`);
-                            type = 'success';
-                            icon = '✅';
-                        } else if (newOp.estado === 'Cancelado') {
-                            changeMsgs.push(`${newOp.numero_op} fue cancelada`);
-                            type = 'danger';
-                            icon = '⚠️';
-                        } else {
-                            changeMsgs.push(`${newOp.numero_op} cambió a ${newOp.estado}`);
-                            if (newOp.prioridad === 'URGENTE') {
-                                type = 'warning';
-                                icon = '🔥';
-                            }
-                        }
                     }
 
                     if (oldOp.lider_produccion !== newOp.lider_produccion) {
                         changed = true;
-                        if (newOp.lider_produccion) {
-                            changeMsgs.push(`${newOp.numero_op} asignada a ${newOp.lider_produccion}`);
-                        } else {
-                            changeMsgs.push(`${newOp.numero_op} quedó sin líder asignado`);
-                        }
                     }
 
                     if (!changed && (
@@ -797,13 +694,11 @@
                         oldOp.marca !== newOp.marca
                     )) {
                         changed = true;
-                        changeMsgs.push(`${newOp.numero_op} fue modificada`);
                     }
 
                     if (changed) {
                         notify = true;
                         tempUpdatedIds.push(newOp.id);
-                        changeMsgs.forEach(msg => showCustomToast(msg, type, icon));
                     }
                 }
             });
@@ -819,10 +714,6 @@
             document.getElementById('last-update-time').textContent = timeStr;
 
             if (notify) {
-                if (isSoundEnabled) {
-                    playAlertSound();
-                }
-
                 updatedOrderIds = tempUpdatedIds;
 
                 // Reset highlighted classes after 7 seconds
@@ -830,6 +721,10 @@
                     updatedOrderIds = [];
                     renderTable(currentOrders);
                 }, 7000);
+            }
+
+            if (data.recent_events) {
+                processRecentEvents(data.recent_events);
             }
 
             // Sync client arrays

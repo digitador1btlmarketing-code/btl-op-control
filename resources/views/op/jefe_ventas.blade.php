@@ -485,42 +485,7 @@
     @endforeach
     const storageBaseUrl = "/storage";
 
-    // Sound Setup
-    let isSoundEnabled = localStorage.getItem('jefe_sound_enabled') === 'true';
-    const alertAudio = new Audio("/sounds/alert.mp3");
 
-    function playAlertSound() {
-        if (isSoundEnabled) {
-            alertAudio.play().catch(err => console.log("Audio play blocked by browser policies"));
-        }
-    }
-
-    function updateSoundButtonUI() {
-        const btn = document.getElementById('btn-sound-toggle');
-        const icon = document.getElementById('sound-icon');
-        if (btn && icon) {
-            if (isSoundEnabled) {
-                btn.querySelector('span').textContent = 'Sonido Activo';
-                icon.textContent = '🔊';
-                btn.style.background = 'rgba(0, 242, 195, 0.15)';
-                btn.style.borderColor = 'rgba(0, 242, 195, 0.3)';
-            } else {
-                btn.querySelector('span').textContent = 'Activar Sonido';
-                icon.textContent = '🔇';
-                btn.style.background = 'rgba(255, 255, 255, 0.05)';
-                btn.style.borderColor = 'var(--border-glass)';
-            }
-        }
-    }
-
-    function toggleSound() {
-        isSoundEnabled = !isSoundEnabled;
-        localStorage.setItem('jefe_sound_enabled', isSoundEnabled);
-        updateSoundButtonUI();
-        if (isSoundEnabled) {
-            playAlertSound();
-        }
-    }
 
     // Modal: New Vendedor
     function openNewUserModal() {
@@ -834,18 +799,15 @@
             document.getElementById('kpi-terminadas').textContent = kpis.terminadas;
             document.getElementById('kpi-solicitudes').textContent = kpis.solicitudes_pendientes;
 
-            // Check if there are new request IDs that we haven't seen yet to play sound!
-            let playSound = false;
+            // Sync requests set
             newRequests.forEach(req => {
                 if (!pendingRequestIds.has(req.id)) {
                     pendingRequestIds.add(req.id);
-                    playSound = true;
-                    showToast(`Nueva solicitud de fecha recibida para ${req.orden_produccion.numero_op}`, 'warning');
                 }
             });
 
-            if (playSound) {
-                playAlertSound();
+            if (data.recent_events) {
+                processRecentEvents(data.recent_events);
             }
 
             // Sync table of requests

@@ -511,6 +511,10 @@
                     hideDetail();
                 }
             }
+
+            if (data.recent_events) {
+                processRecentEvents(data.recent_events);
+            }
         })
         .catch(err => console.log("AJAX updates polling error:", err));
     }

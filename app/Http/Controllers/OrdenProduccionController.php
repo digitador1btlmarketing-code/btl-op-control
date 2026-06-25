@@ -261,7 +261,8 @@ class OrdenProduccionController extends Controller
 
         return response()->json([
             'ordenes' => $ordenes,
-            'kpis' => $kpis
+            'kpis' => $kpis,
+            'recent_events' => $this->getRecentEventsForTV($categoria)
         ]);
     }
 
@@ -326,7 +327,8 @@ class OrdenProduccionController extends Controller
         return response()->json([
             'ordenes' => $ordenes,
             'kpis' => $kpis,
-            'recent_resolutions' => $recentResolutions
+            'recent_resolutions' => $recentResolutions,
+            'recent_events' => $this->getRecentEvents()
         ]);
     }
 
@@ -391,7 +393,8 @@ class OrdenProduccionController extends Controller
         });
 
         return response()->json([
-            'ordenes' => $ordenes
+            'ordenes' => $ordenes,
+            'recent_events' => $this->getRecentEvents()
         ]);
     }
 
@@ -414,6 +417,7 @@ class OrdenProduccionController extends Controller
         ->orderBy('fecha_entrega', 'asc')
         ->orderBy('hora_entrega', 'asc')
         ->get();
+        $ordenes->load('solicitudPendiente');
 
         // Solicitudes filter: OP created by this jefe's vendors, by this jefe, or by ADMIN-PROD-2026
         $solicitudes = SolicitudCambioFecha::with('ordenProduccion')
@@ -471,6 +475,8 @@ class OrdenProduccionController extends Controller
         ->orderBy('fecha_entrega', 'asc')
         ->orderBy('hora_entrega', 'asc')
         ->get();
+        
+        $ordenes->load('solicitudPendiente');
             
         $ordenes->each(function ($o) {
             $o->append(['dias_restantes', 'prioridad', 'mostrar_fuego']);
@@ -503,7 +509,8 @@ class OrdenProduccionController extends Controller
         return response()->json([
             'ordenes' => $ordenes,
             'solicitudes' => $solicitudes,
-            'kpis' => $kpis
+            'kpis' => $kpis,
+            'recent_events' => $this->getRecentEvents()
         ]);
     }
 
@@ -880,6 +887,43 @@ class OrdenProduccionController extends Controller
      */
     public function obtenerHistorial($id)
     {
+        $orden = OrdenProduccion::findOrFail($id);
+        $userRole = session('user_role');
+        $userCode = session('user_code');
+
+        $authorized = false;
+
+        if ($userRole === 'admin') {
+            $authorized = true;
+        } elseif ($userRole === 'admin_branding') {
+            if ($orden->categoria === 'Branding') {
+                $authorized = true;
+            }
+        } elseif ($userRole === 'admin_promo') {
+            if ($orden->categoria === 'Promocional') {
+                $authorized = true;
+            }
+        } elseif ($userRole === 'jefe_ventas') {
+            if ($orden->creado_por_codigo === $userCode) {
+                $authorized = true;
+            } else {
+                $isCreatorVendorOfJefe = UsuarioAcceso::where('codigo', $orden->creado_por_codigo)
+                    ->where('jefe_codigo', $userCode)
+                    ->exists();
+                if ($isCreatorVendorOfJefe) {
+                    $authorized = true;
+                }
+            }
+        } elseif ($userRole === 'ventas') {
+            if ($orden->creado_por_codigo === $userCode) {
+                $authorized = true;
+            }
+        }
+
+        if (!$authorized) {
+            return response()->json(['error' => 'No tiene permisos para ver el historial de esta orden.'], 403);
+        }
+
         $historial = HistorialOrden::where('orden_produccion_id', $id)
             ->orderBy('created_at', 'desc')
             ->get();
@@ -1180,5 +1224,83 @@ class OrdenProduccionController extends Controller
         return response($dompdf->output())
             ->header('Content-Type', 'application/pdf')
             ->header('Content-Disposition', 'attachment; filename="Ficha_OP_' . $orden->numero_op . '.pdf"');
+    }
+
+    /**
+     * Get recent events for real-time notifications, filtered by role permissions.
+     */
+    private function getRecentEvents()
+    {
+        $userRole = session('user_role');
+        $userCode = session('user_code');
+        
+        $query = HistorialOrden::with('ordenProduccion')
+            ->where('created_at', '>=', now()->subSeconds(30));
+            
+        if ($userCode) {
+            $query->where('realizado_por_codigo', '!=', $userCode);
+        }
+        
+        if ($userRole === 'admin_branding') {
+            $query->whereHas('ordenProduccion', function($q) {
+                $q->where('categoria', 'Branding');
+            });
+        } elseif ($userRole === 'admin_promo') {
+            $query->whereHas('ordenProduccion', function($q) {
+                $q->where('categoria', 'Promocional');
+            });
+        } elseif ($userRole === 'jefe_ventas') {
+            $query->whereHas('ordenProduccion', function($q) use ($userCode) {
+                $q->where(function($sub) use ($userCode) {
+                    $sub->whereIn('creado_por_codigo', function($uQuery) use ($userCode) {
+                        $uQuery->select('codigo')
+                            ->from('usuarios_acceso')
+                            ->where('jefe_codigo', $userCode);
+                    })
+                    ->orWhere('creado_por_codigo', $userCode);
+                });
+            });
+        } elseif ($userRole === 'ventas') {
+            $query->whereHas('ordenProduccion', function($q) use ($userCode) {
+                $q->where('creado_por_codigo', $userCode);
+            });
+        }
+        
+        return $query->orderBy('created_at', 'asc')->get()->map(function($event) {
+            return [
+                'id' => $event->id,
+                'orden_produccion_id' => $event->orden_produccion_id,
+                'numero_op' => $event->ordenProduccion->numero_op ?? 'OP',
+                'proyecto' => $event->ordenProduccion->proyecto ?? '',
+                'tipo_evento' => $event->tipo_evento,
+                'descripcion' => $event->descripcion,
+                'created_at' => $event->created_at->toIso8601String(),
+            ];
+        });
+    }
+
+    /**
+     * Get recent events for TV view, filtered by category.
+     */
+    private function getRecentEventsForTV($categoria)
+    {
+        return HistorialOrden::with('ordenProduccion')
+            ->where('created_at', '>=', now()->subSeconds(30))
+            ->whereHas('ordenProduccion', function($q) use ($categoria) {
+                $q->where('categoria', $categoria);
+            })
+            ->orderBy('created_at', 'asc')
+            ->get()
+            ->map(function($event) {
+                return [
+                    'id' => $event->id,
+                    'orden_produccion_id' => $event->orden_produccion_id,
+                    'numero_op' => $event->ordenProduccion->numero_op ?? 'OP',
+                    'proyecto' => $event->ordenProduccion->proyecto ?? '',
+                    'tipo_evento' => $event->tipo_evento,
+                    'descripcion' => $event->descripcion,
+                    'created_at' => $event->created_at->toIso8601String(),
+                ];
+            });
     }
 }

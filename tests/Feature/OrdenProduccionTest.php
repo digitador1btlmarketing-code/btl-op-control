@@ -454,4 +454,126 @@ class OrdenProduccionTest extends TestCase
         $this->assertCount(1, $data['ordenes']);
         $this->assertEquals('OP-CAJINA-VEND', $data['ordenes'][0]['numero_op']);
     }
+
+    /**
+     * Test history view endpoint permissions.
+     */
+    public function test_historial_permissions(): void
+    {
+        // Create an OP of category Branding by seller Dafne (who belongs to Rizo)
+        $op = OrdenProduccion::create([
+            'categoria' => 'Branding',
+            'numero_op' => 'OP-RIZO-VEND',
+            'proyecto' => 'Rizo Project',
+            'presupuestista' => 'Presup',
+            'cliente' => 'Client',
+            'marca' => 'Brand',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '12:00:00',
+            'entregar_a' => 'Cliente',
+            'creado_por_codigo' => 'DAFNE-RAMIREZ-PROD-2026',
+            'creado_por_nombre' => 'DAFNE',
+            'creado_por_rol' => 'ventas',
+        ]);
+
+        // 1. Master Admin (admin) should see history
+        session([
+            'user_role' => 'admin',
+            'user_code' => 'ADMIN-PROD-2026'
+        ]);
+        $response = $this->getJson("/op/historial/{$op->id}");
+        $response->assertStatus(200);
+
+        // 2. Admin Branding should see history (as OP is Branding)
+        session([
+            'user_role' => 'admin_branding',
+            'user_code' => 'ADMIN-BRANDING-2026'
+        ]);
+        $response = $this->getJson("/op/historial/{$op->id}");
+        $response->assertStatus(200);
+
+        // 3. Admin Promo should NOT see history (as OP is Branding)
+        session([
+            'user_role' => 'admin_promo',
+            'user_code' => 'ADMIN-PROMO-2026'
+        ]);
+        $response = $this->getJson("/op/historial/{$op->id}");
+        $response->assertStatus(403);
+
+        // 4. Jefe Rizo should see history (as creator Dafne belongs to Rizo)
+        session([
+            'user_role' => 'jefe_ventas',
+            'user_code' => 'JEFERIZO-PROD-2026'
+        ]);
+        $response = $this->getJson("/op/historial/{$op->id}");
+        $response->assertStatus(200);
+
+        // 5. Jefe Cajina should NOT see history (as Dafne does not belong to Cajina)
+        session([
+            'user_role' => 'jefe_ventas',
+            'user_code' => 'JEFECAJINA-PROD-2026'
+        ]);
+        $response = $this->getJson("/op/historial/{$op->id}");
+        $response->assertStatus(403);
+
+        // 6. Dafne (vendedor creator) should see history
+        session([
+            'user_role' => 'ventas',
+            'user_code' => 'DAFNE-RAMIREZ-PROD-2026'
+        ]);
+        $response = $this->getJson("/op/historial/{$op->id}");
+        $response->assertStatus(200);
+
+        // 7. Another seller should NOT see history
+        session([
+            'user_role' => 'ventas',
+            'user_code' => 'CARLOS-VARGAS-PROD-2026'
+        ]);
+        $response = $this->getJson("/op/historial/{$op->id}");
+        $response->assertStatus(403);
+    }
+
+    /**
+     * Test updates polling return recent events.
+     */
+    public function test_updates_return_recent_events(): void
+    {
+        $op = OrdenProduccion::create([
+            'categoria' => 'Branding',
+            'numero_op' => 'OP-RIZO-VEND',
+            'proyecto' => 'Rizo Project',
+            'presupuestista' => 'Presup',
+            'cliente' => 'Client',
+            'marca' => 'Brand',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '12:00:00',
+            'entregar_a' => 'Cliente',
+            'creado_por_codigo' => 'DAFNE-RAMIREZ-PROD-2026',
+            'creado_por_nombre' => 'DAFNE',
+            'creado_por_rol' => 'ventas',
+        ]);
+
+        // Create a history record by a system user (to check we receive it)
+        $op->historial()->create([
+            'tipo_evento' => 'cambio_estado',
+            'descripcion' => 'SISTEMA cambió el estado a En proceso.',
+            'realizado_por_codigo' => 'SISTEMA',
+            'realizado_por_nombre' => 'SISTEMA',
+            'realizado_por_rol' => 'sistema',
+        ]);
+
+        // Log in as Jefe Rizo
+        session([
+            'user_role' => 'jefe_ventas',
+            'user_code' => 'JEFERIZO-PROD-2026'
+        ]);
+
+        $response = $this->getJson('/op/jefe-ventas/updates');
+        $response->assertStatus(200);
+        $response->assertJsonStructure(['recent_events']);
+        
+        $data = $response->json();
+        $this->assertNotEmpty($data['recent_events']);
+        $this->assertEquals('cambio_estado', $data['recent_events'][0]['tipo_evento']);
+    }
 }
