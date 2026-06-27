@@ -129,9 +129,10 @@
         <div class="header-logo">
             @php
                 $logoBase64 = '';
+                $isGdAvailable = extension_loaded('gd');
                 try {
                     $logoPath = public_path('img/logo-btl.png');
-                    if (file_exists($logoPath)) {
+                    if ($isGdAvailable && file_exists($logoPath)) {
                         $logoBase64 = base64_encode(file_get_contents($logoPath));
                     }
                 } catch (\Exception $e) {
