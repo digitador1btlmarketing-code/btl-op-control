@@ -1174,14 +1174,23 @@ class OrdenProduccionController extends Controller
             $options->set('fontDir', $fontPath);
             $options->set('fontCache', $fontPath);
 
-            $dompdf = new Dompdf($options);
-            $dompdf->loadHtml($html);
-            $dompdf->setPaper('letter', 'landscape');
-            $dompdf->render();
+            try {
+                $dompdf = new Dompdf($options);
+                $dompdf->loadHtml($html);
+                $dompdf->setPaper('letter', 'landscape');
+                $dompdf->render();
+            } catch (\Exception $e) {
+                // If it fails (e.g. PHP GD extension missing on Render), strip <img> tags and re-render
+                $htmlSinLogo = preg_replace('/<img[^>]+>/i', '<div style="font-weight: bold; font-size: 16px; color: #00D2FF; letter-spacing: 1px;">BTL MARKETING</div>', $html);
+                $dompdf = new Dompdf($options);
+                $dompdf->loadHtml($htmlSinLogo);
+                $dompdf->setPaper('letter', 'landscape');
+                $dompdf->render();
+            }
 
             return response($dompdf->output())
                 ->header('Content-Type', 'application/pdf')
-                ->header('Content-Disposition', 'attachment; filename="Reporte_OP_' . date('Ymd_His') . '.pdf"');
+                ->header('Content-Disposition', 'inline; filename="Reporte_OP_' . date('Ymd_His') . '.pdf"');
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error('Error al exportar PDF general: ' . $e->getMessage(), [
                 'exception' => $e
@@ -1242,14 +1251,23 @@ class OrdenProduccionController extends Controller
             $options->set('fontDir', $fontPath);
             $options->set('fontCache', $fontPath);
 
-            $dompdf = new Dompdf($options);
-            $dompdf->loadHtml($html);
-            $dompdf->setPaper('letter', 'portrait');
-            $dompdf->render();
+            try {
+                $dompdf = new Dompdf($options);
+                $dompdf->loadHtml($html);
+                $dompdf->setPaper('letter', 'portrait');
+                $dompdf->render();
+            } catch (\Exception $e) {
+                // If it fails (e.g. PHP GD extension missing on Render), strip <img> tags and re-render
+                $htmlSinLogo = preg_replace('/<img[^>]+>/i', '<div style="font-weight: bold; font-size: 16px; color: #00D2FF; letter-spacing: 1px;">BTL MARKETING</div>', $html);
+                $dompdf = new Dompdf($options);
+                $dompdf->loadHtml($htmlSinLogo);
+                $dompdf->setPaper('letter', 'portrait');
+                $dompdf->render();
+            }
 
             return response($dompdf->output())
                 ->header('Content-Type', 'application/pdf')
-                ->header('Content-Disposition', 'attachment; filename="Ficha_OP_' . $orden->numero_op . '.pdf"');
+                ->header('Content-Disposition', 'inline; filename="Ficha_OP_' . $orden->numero_op . '.pdf"');
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error('Error al exportar PDF detalle (ID ' . $id . '): ' . $e->getMessage(), [
                 'exception' => $e

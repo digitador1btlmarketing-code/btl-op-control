@@ -334,7 +334,7 @@
         <h4 style="font-size: 1.05rem; color: var(--blue-bright); margin-bottom: 10px; font-weight: 700;">Solicitud de Cambio de Fecha</h4>
         <div id="detail-date-change-status" style="margin-bottom: 10px; font-size: 0.9rem; line-height: 1.4;"></div>
         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-            <a id="btn-download-pdf-op" href="#" class="btn-secondary" style="width: auto; padding: 8px 16px; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; background: rgba(0, 210, 255, 0.1); border-color: rgba(0, 210, 255, 0.2); color: var(--blue-bright);">
+            <a id="btn-download-pdf-op" href="#" target="_blank" class="btn-secondary" style="width: auto; padding: 8px 16px; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; background: rgba(0, 210, 255, 0.1); border-color: rgba(0, 210, 255, 0.2); color: var(--blue-bright);">
                 📄 Descargar PDF OP
             </a>
             <button id="btn-request-date-change" onclick="openRequestDateChangeModal()" class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 0.85rem; display: none;">
@@ -1470,7 +1470,11 @@
         const filterVal = document.getElementById('filter-status')?.value || 'activas';
         const categoryVal = activeCategory || 'todos';
         const url = `/op/exportar/${type}?search=${encodeURIComponent(searchVal)}&status=${encodeURIComponent(filterVal)}&category=${encodeURIComponent(categoryVal)}`;
-        window.location.href = url;
+        if (type === 'pdf') {
+            window.open(url, '_blank');
+        } else {
+            window.location.href = url;
+        }
     }
 
     // Modal: Collapsible History functions
