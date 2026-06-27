@@ -1080,99 +1080,114 @@ class OrdenProduccionController extends Controller
      */
     public function exportarPDF(Request $request)
     {
-        $userRole = session('user_role');
-        $userCode = session('user_code');
-        $query = OrdenProduccion::query();
+        try {
+            $userRole = session('user_role');
+            $userCode = session('user_code');
+            $query = OrdenProduccion::query();
 
-        // Role-based category/vendor filter
-        if ($userRole === 'admin_branding') {
-            $query->where('categoria', 'Branding');
-        } elseif ($userRole === 'admin_promo') {
-            $query->where('categoria', 'Promocional');
-        } elseif ($userRole === 'jefe_ventas') {
-            $query->where(function($q) use ($userCode) {
-                $q->whereIn('creado_por_codigo', function($sub) use ($userCode) {
-                    $sub->select('codigo')
-                        ->from('usuarios_acceso')
-                        ->where('jefe_codigo', $userCode);
-                })
-                ->orWhere('creado_por_codigo', $userCode);
-            });
-        }
-
-        // Apply filters
-        $search = $request->query('search');
-        $status = $request->query('status');
-        $category = $request->query('category');
-
-        if ($search) {
-            $query->where('numero_op', 'ilike', '%' . $search . '%');
-        }
-
-        if ($status && $status !== 'todos') {
-            if ($status === 'activas') {
-                $query->whereIn('estado', ['Pendiente', 'En proceso']);
-            } else {
-                $query->where('estado', $status);
+            // Role-based category/vendor filter
+            if ($userRole === 'admin_branding') {
+                $query->where('categoria', 'Branding');
+            } elseif ($userRole === 'admin_promo') {
+                $query->where('categoria', 'Promocional');
+            } elseif ($userRole === 'jefe_ventas') {
+                $query->where(function($q) use ($userCode) {
+                    $q->whereIn('creado_por_codigo', function($sub) use ($userCode) {
+                        $sub->select('codigo')
+                            ->from('usuarios_acceso')
+                            ->where('jefe_codigo', $userCode);
+                    })
+                    ->orWhere('creado_por_codigo', $userCode);
+                });
             }
+
+            // Apply filters
+            $search = $request->query('search');
+            $status = $request->query('status');
+            $category = $request->query('category');
+
+            if ($search) {
+                $query->where('numero_op', 'ilike', '%' . $search . '%');
+            }
+
+            if ($status && $status !== 'todos') {
+                if ($status === 'activas') {
+                    $query->whereIn('estado', ['Pendiente', 'En proceso']);
+                } else {
+                    $query->where('estado', $status);
+                }
+            }
+
+            if ($category && $category !== 'todos') {
+                $query->where('categoria', $category);
+            }
+
+            $ordenes = $query->orderBy('fecha_entrega', 'asc')
+                ->orderBy('hora_entrega', 'asc')
+                ->get();
+
+            $kpis = [
+                'total' => $ordenes->count(),
+                'pendientes' => $ordenes->where('estado', 'Pendiente')->count(),
+                'en_proceso' => $ordenes->where('estado', 'En proceso')->count(),
+                'terminadas' => $ordenes->where('estado', 'Terminado')->count(),
+                'urgentes' => $ordenes->filter(fn($o) => $o->prioridad === 'URGENTE')->count(),
+            ];
+
+            $statusTextMap = [
+                'activas' => 'Todas activas',
+                'Pendiente' => 'Pendientes',
+                'En proceso' => 'En proceso',
+                'Terminado' => 'Terminadas',
+                'Cancelado' => 'Canceladas',
+                'todos' => 'Todas'
+            ];
+            $statusText = isset($statusTextMap[$status]) ? $statusTextMap[$status] : 'Todas activas';
+
+            $filtros = [
+                'search' => $search,
+                'status_text' => $statusText,
+                'category' => $category
+            ];
+
+            $data = [
+                'ordenes' => $ordenes,
+                'kpis' => $kpis,
+                'filtros' => $filtros,
+                'user_name' => session('user_name'),
+                'user_code' => session('user_code'),
+                'fecha_emision' => now()->format('d/m/Y H:i:s'),
+            ];
+
+            $html = view('pdf.reporte_pdf', $data)->render();
+
+            $fontPath = storage_path('fonts');
+            if (!file_exists($fontPath)) {
+                mkdir($fontPath, 0755, true);
+            }
+
+            $options = new Options();
+            $options->set('isHtml5ParserEnabled', true);
+            $options->set('isRemoteEnabled', true);
+            $options->set('defaultFont', 'sans-serif');
+            $options->set('tempDir', storage_path('app'));
+            $options->set('fontDir', $fontPath);
+            $options->set('fontCache', $fontPath);
+
+            $dompdf = new Dompdf($options);
+            $dompdf->loadHtml($html);
+            $dompdf->setPaper('letter', 'landscape');
+            $dompdf->render();
+
+            return response($dompdf->output())
+                ->header('Content-Type', 'application/pdf')
+                ->header('Content-Disposition', 'attachment; filename="Reporte_OP_' . date('Ymd_His') . '.pdf"');
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Error al exportar PDF general: ' . $e->getMessage(), [
+                'exception' => $e
+            ]);
+            return response('Error al generar el PDF: ' . $e->getMessage(), 500);
         }
-
-        if ($category && $category !== 'todos') {
-            $query->where('categoria', $category);
-        }
-
-        $ordenes = $query->orderBy('fecha_entrega', 'asc')
-            ->orderBy('hora_entrega', 'asc')
-            ->get();
-
-        $kpis = [
-            'total' => $ordenes->count(),
-            'pendientes' => $ordenes->where('estado', 'Pendiente')->count(),
-            'en_proceso' => $ordenes->where('estado', 'En proceso')->count(),
-            'terminadas' => $ordenes->where('estado', 'Terminado')->count(),
-            'urgentes' => $ordenes->filter(fn($o) => $o->prioridad === 'URGENTE')->count(),
-        ];
-
-        $statusTextMap = [
-            'activas' => 'Todas activas',
-            'Pendiente' => 'Pendientes',
-            'En proceso' => 'En proceso',
-            'Terminado' => 'Terminadas',
-            'Cancelado' => 'Canceladas',
-            'todos' => 'Todas'
-        ];
-        $statusText = isset($statusTextMap[$status]) ? $statusTextMap[$status] : 'Todas activas';
-
-        $filtros = [
-            'search' => $search,
-            'status_text' => $statusText,
-            'category' => $category
-        ];
-
-        $data = [
-            'ordenes' => $ordenes,
-            'kpis' => $kpis,
-            'filtros' => $filtros,
-            'user_name' => session('user_name'),
-            'user_code' => session('user_code'),
-            'fecha_emision' => now()->format('d/m/Y H:i:s'),
-        ];
-
-        $html = view('pdf.reporte_pdf', $data)->render();
-
-        $options = new Options();
-        $options->set('isHtml5ParserEnabled', true);
-        $options->set('isRemoteEnabled', true);
-        $options->set('defaultFont', 'sans-serif');
-
-        $dompdf = new Dompdf($options);
-        $dompdf->loadHtml($html);
-        $dompdf->setPaper('letter', 'landscape');
-        $dompdf->render();
-
-        return response($dompdf->output())
-            ->header('Content-Type', 'application/pdf')
-            ->header('Content-Disposition', 'attachment; filename="Reporte_OP_' . date('Ymd_His') . '.pdf"');
     }
 
     /**
@@ -1180,52 +1195,67 @@ class OrdenProduccionController extends Controller
      */
     public function exportarDetallePDF($id)
     {
-        $orden = OrdenProduccion::with('historial')->findOrFail($id);
-        $userRole = session('user_role');
-        $userCode = session('user_code');
+        try {
+            $orden = OrdenProduccion::with('historial')->findOrFail($id);
+            $userRole = session('user_role');
+            $userCode = session('user_code');
 
-        // Verify access to this specific OP
-        if ($userRole === 'admin_branding' && $orden->categoria !== 'Branding') {
-            abort(403, 'No tiene permisos para exportar esta orden.');
-        }
-        if ($userRole === 'admin_promo' && $orden->categoria !== 'Promocional') {
-            abort(403, 'No tiene permisos para exportar esta orden.');
-        }
-        if ($userRole === 'jefe_ventas') {
-            $creadoPor = $orden->creado_por_codigo;
-            $isCreatorVendorOfJefe = UsuarioAcceso::where('codigo', $creadoPor)
-                ->where('jefe_codigo', $userCode)
-                ->exists();
-            if ($creadoPor !== $userCode && !$isCreatorVendorOfJefe) {
+            // Verify access to this specific OP
+            if ($userRole === 'admin_branding' && $orden->categoria !== 'Branding') {
                 abort(403, 'No tiene permisos para exportar esta orden.');
             }
+            if ($userRole === 'admin_promo' && $orden->categoria !== 'Promocional') {
+                abort(403, 'No tiene permisos para exportar esta orden.');
+            }
+            if ($userRole === 'jefe_ventas') {
+                $creadoPor = $orden->creado_por_codigo;
+                $isCreatorVendorOfJefe = UsuarioAcceso::where('codigo', $creadoPor)
+                    ->where('jefe_codigo', $userCode)
+                    ->exists();
+                if ($creadoPor !== $userCode && !$isCreatorVendorOfJefe) {
+                    abort(403, 'No tiene permisos para exportar esta orden.');
+                }
+            }
+            if ($userRole === 'ventas' && $orden->creado_por_codigo !== $userCode) {
+                abort(403, 'No tiene permisos para exportar esta orden.');
+            }
+
+            $data = [
+                'orden' => $orden,
+                'user_name' => session('user_name'),
+                'user_code' => session('user_code'),
+                'fecha_emision' => now()->format('d/m/Y H:i:s'),
+            ];
+
+            $html = view('pdf.detalle_pdf', $data)->render();
+
+            $fontPath = storage_path('fonts');
+            if (!file_exists($fontPath)) {
+                mkdir($fontPath, 0755, true);
+            }
+
+            $options = new Options();
+            $options->set('isHtml5ParserEnabled', true);
+            $options->set('isRemoteEnabled', true);
+            $options->set('defaultFont', 'sans-serif');
+            $options->set('tempDir', storage_path('app'));
+            $options->set('fontDir', $fontPath);
+            $options->set('fontCache', $fontPath);
+
+            $dompdf = new Dompdf($options);
+            $dompdf->loadHtml($html);
+            $dompdf->setPaper('letter', 'portrait');
+            $dompdf->render();
+
+            return response($dompdf->output())
+                ->header('Content-Type', 'application/pdf')
+                ->header('Content-Disposition', 'attachment; filename="Ficha_OP_' . $orden->numero_op . '.pdf"');
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Error al exportar PDF detalle (ID ' . $id . '): ' . $e->getMessage(), [
+                'exception' => $e
+            ]);
+            return response('Error al generar el PDF de detalle: ' . $e->getMessage(), 500);
         }
-        if ($userRole === 'ventas' && $orden->creado_por_codigo !== $userCode) {
-            abort(403, 'No tiene permisos para exportar esta orden.');
-        }
-
-        $data = [
-            'orden' => $orden,
-            'user_name' => session('user_name'),
-            'user_code' => session('user_code'),
-            'fecha_emision' => now()->format('d/m/Y H:i:s'),
-        ];
-
-        $html = view('pdf.detalle_pdf', $data)->render();
-
-        $options = new Options();
-        $options->set('isHtml5ParserEnabled', true);
-        $options->set('isRemoteEnabled', true);
-        $options->set('defaultFont', 'sans-serif');
-
-        $dompdf = new Dompdf($options);
-        $dompdf->loadHtml($html);
-        $dompdf->setPaper('letter', 'portrait');
-        $dompdf->render();
-
-        return response($dompdf->output())
-            ->header('Content-Type', 'application/pdf')
-            ->header('Content-Disposition', 'attachment; filename="Ficha_OP_' . $orden->numero_op . '.pdf"');
     }
 
     /**

@@ -162,10 +162,14 @@
     <header>
         <div class="header-logo">
             @php
-                $logoPath = public_path('img/logo-btl.png');
                 $logoBase64 = '';
-                if (file_exists($logoPath)) {
-                    $logoBase64 = base64_encode(file_get_contents($logoPath));
+                try {
+                    $logoPath = public_path('img/logo-btl.png');
+                    if (file_exists($logoPath)) {
+                        $logoBase64 = base64_encode(file_get_contents($logoPath));
+                    }
+                } catch (\Exception $e) {
+                    $logoBase64 = '';
                 }
             @endphp
             @if($logoBase64)
