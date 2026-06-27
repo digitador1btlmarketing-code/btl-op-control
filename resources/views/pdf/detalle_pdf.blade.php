@@ -127,8 +127,15 @@
 
     <header>
         <div class="header-logo">
-            @if(file_exists(public_path('img/logo-btl.png')))
-                <img src="{{ public_path('img/logo-btl.png') }}" style="width: 100px; height: auto;">
+            @php
+                $logoPath = public_path('img/logo-btl.png');
+                $logoBase64 = '';
+                if (file_exists($logoPath)) {
+                    $logoBase64 = base64_encode(file_get_contents($logoPath));
+                }
+            @endphp
+            @if($logoBase64)
+                <img src="data:image/png;base64,{{ $logoBase64 }}" style="width: 100px; height: auto;">
             @else
                 <div style="font-weight: bold; font-size: 16px; color: #00D2FF; letter-spacing: 1px;">BTL MARKETING</div>
             @endif

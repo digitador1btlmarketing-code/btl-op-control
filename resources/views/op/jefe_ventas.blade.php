@@ -137,6 +137,7 @@
                     <th>Marca</th>
                     <th>Presupuestista</th>
                     <th>Creado Por</th>
+                    <th>Hora Solicitud</th>
                     <th>Entrega</th>
                     <th>Estado</th>
                     <th>Avance</th>
@@ -171,6 +172,13 @@
                             <small style="color: var(--text-muted);">{{ $orden->creado_por_rol ?? 'admin' }}</small>
                         </td>
                         <td>
+                            <span class="text-dash">{{ \Carbon\Carbon::parse($orden->created_at)->format('d/m/Y') }}</span>
+                            <br>
+                            <small style="color: var(--text-muted); font-weight: 600;">
+                                {{ \Carbon\Carbon::parse($orden->created_at)->format('H:i') }}
+                            </small>
+                        </td>
+                        <td>
                             <span class="text-dash">{{ \Carbon\Carbon::parse($orden->fecha_entrega)->format('d/m/Y') }}</span>
                             <br>
                             <small style="color: var(--text-muted); font-weight: 600;">
@@ -202,7 +210,7 @@
                     </tr>
                 @empty
                     <tr id="empty-row">
-                        <td colspan="10" style="text-align: center; color: var(--text-muted); padding: 40px;">
+                        <td colspan="11" style="text-align: center; color: var(--text-muted); padding: 40px;">
                             No hay órdenes de producción registradas.
                         </td>
                     </tr>
@@ -592,7 +600,7 @@
                     const tbody = document.getElementById('jefe-table-body');
                     const tr = document.createElement('tr');
                     tr.id = 'no-results-row';
-                    tr.innerHTML = `<td colspan="10" style="text-align: center; color: var(--text-muted); padding: 40px;">No se encontraron órdenes con los filtros seleccionados.</td>`;
+                    tr.innerHTML = `<td colspan="11" style="text-align: center; color: var(--text-muted); padding: 40px;">No se encontraron órdenes con los filtros seleccionados.</td>`;
                     tbody.appendChild(tr);
                 }
             } else {
@@ -900,6 +908,17 @@
                     formattedTime = orden.hora_entrega.substring(0, 5);
                 }
 
+                let createdDateStr = '-';
+                let createdTimeStr = '-';
+                if (orden.created_at) {
+                    const dateObj = new Date(orden.created_at);
+                    createdDateStr = String(dateObj.getDate()).padStart(2, '0') + '/' +
+                                     String(dateObj.getMonth() + 1).padStart(2, '0') + '/' +
+                                     dateObj.getFullYear();
+                    createdTimeStr = String(dateObj.getHours()).padStart(2, '0') + ':' +
+                                     String(dateObj.getMinutes()).padStart(2, '0');
+                }
+
                 const fireClass = (orden.estado === 'Terminado' || orden.estado === 'Cancelado') ? 'extinguished' : (!orden.mostrar_fuego ? 'hidden-fire' : '');
                 const badgeCategoryClass = orden.categoria === 'Branding' ? 'badge-normal' : 'badge-proxima';
                 const progressFillClass = orden.estado === 'Pendiente' ? 'progress-fill-pendiente' :
@@ -929,6 +948,13 @@
                     <td>
                         ${orden.creado_por_nombre || 'ADMINISTRADOR'}<br>
                         <small style="color: var(--text-muted);">${orden.creado_por_rol || 'admin'}</small>
+                    </td>
+                    <td>
+                        <span class="text-dash">${createdDateStr}</span>
+                        <br>
+                        <small style="color: var(--text-muted); font-weight: 600;">
+                            ${createdTimeStr}
+                        </small>
                     </td>
                     <td>
                         <span class="text-dash">${formattedDate}</span>

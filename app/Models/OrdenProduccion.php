@@ -44,6 +44,12 @@ class OrdenProduccion extends Model
         'mostrar_fuego',
     ];
 
+    protected $casts = [
+        'fecha_entrega' => 'date:Y-m-d',
+        'fecha_instalacion' => 'date:Y-m-d',
+        'fecha_desinstalacion' => 'date:Y-m-d',
+    ];
+
     protected static function booted()
     {
         static::saving(function ($orden) {

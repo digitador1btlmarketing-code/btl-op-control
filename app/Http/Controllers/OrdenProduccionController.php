@@ -10,6 +10,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 
 class OrdenProduccionController extends Controller
 {
@@ -804,8 +806,8 @@ class OrdenProduccionController extends Controller
         ]);
 
         $op->update([
-            'fecha_entrega' => $solicitud->fecha_solicitada,
-            'hora_entrega' => $solicitud->hora_solicitada,
+            'fecha_entrega' => Carbon::parse($solicitud->fecha_solicitada)->format('Y-m-d'),
+            'hora_entrega' => Carbon::parse($solicitud->hora_solicitada)->format('H:i:s'),
         ]);
 
         $fechaActStr = Carbon::parse($solicitud->fecha_actual)->format('d/m/Y');
@@ -1158,12 +1160,12 @@ class OrdenProduccionController extends Controller
 
         $html = view('pdf.reporte_pdf', $data)->render();
 
-        $options = new \Dompdf\Options();
+        $options = new Options();
         $options->set('isHtml5ParserEnabled', true);
         $options->set('isRemoteEnabled', true);
         $options->set('defaultFont', 'sans-serif');
 
-        $dompdf = new \Dompdf\Dompdf($options);
+        $dompdf = new Dompdf($options);
         $dompdf->loadHtml($html);
         $dompdf->setPaper('letter', 'landscape');
         $dompdf->render();
@@ -1211,12 +1213,12 @@ class OrdenProduccionController extends Controller
 
         $html = view('pdf.detalle_pdf', $data)->render();
 
-        $options = new \Dompdf\Options();
+        $options = new Options();
         $options->set('isHtml5ParserEnabled', true);
         $options->set('isRemoteEnabled', true);
         $options->set('defaultFont', 'sans-serif');
 
-        $dompdf = new \Dompdf\Dompdf($options);
+        $dompdf = new Dompdf($options);
         $dompdf->loadHtml($html);
         $dompdf->setPaper('letter', 'portrait');
         $dompdf->render();
