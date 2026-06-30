@@ -52,11 +52,11 @@
                     <span id="sound-icon">🔈</span> <span>Activar Sonido</span>
                 </button>
                 
-                @if(in_array(session('user_role'), ['admin', 'ventas', 'jefe_ventas']))
+                @if(in_array(session('user_role'), ['admin', 'admin_branding', 'admin_promo', 'ventas', 'jefe_ventas']))
                     <a href="{{ route('op.create') }}" class="btn-view-brief" style="margin-right: 10px;">+ Nueva OP</a>
                 @endif
                 
-                @if(session('user_role') === 'admin')
+                @if(in_array(session('user_role'), ['admin', 'admin_branding', 'admin_promo']))
                     <a href="{{ route('op.admin') }}" class="btn-view-brief" style="margin-right: 10px;">Panel Admin</a>
                 @elseif(session('user_role') === 'jefe_ventas')
                     <a href="{{ route('op.jefe_ventas') }}" class="btn-view-brief" style="margin-right: 10px;">Panel Jefe de Ventas</a>

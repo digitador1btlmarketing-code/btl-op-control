@@ -83,6 +83,7 @@
         <button class="filter-btn active" data-filter="activas" onclick="applyStatusFilter('activas')">Todas activas</button>
         <button class="filter-btn" data-filter="Pendiente" onclick="applyStatusFilter('Pendiente')">Pendientes</button>
         <button class="filter-btn" data-filter="En proceso" onclick="applyStatusFilter('En proceso')">En proceso</button>
+        <button class="filter-btn" data-filter="En espera" onclick="applyStatusFilter('En espera')">En espera</button>
         <button class="filter-btn" data-filter="Terminado" onclick="applyStatusFilter('Terminado')">Terminadas</button>
         <button class="filter-btn" data-filter="Cancelado" onclick="applyStatusFilter('Cancelado')">Canceladas</button>
         <button class="filter-btn" data-filter="todos" onclick="applyStatusFilter('todos')">Todas</button>
@@ -105,7 +106,7 @@
                         <th style="width: 9%;">Estado</th>
                         <th style="width: 10%;">Avance</th>
                         <th style="width: 5%;">Días</th>
-                        <th style="width: 8%; text-align: center;">Brief</th>
+                        <th style="width: 8%; text-align: center;">Plano</th>
                     </tr>
                 </thead>
                 <tbody id="tv-table-body">
@@ -158,6 +159,7 @@
                                     @if($orden->estado === 'Pendiente') badge-pendiente
                                     @elseif($orden->estado === 'En proceso') badge-proceso
                                     @elseif($orden->estado === 'Cancelado') badge-cancelado
+                                    @elseif($orden->estado === 'En espera') badge-en-espera
                                     @else badge-terminado @endif">
                                     {{ $orden->estado }}
                                 </span>
@@ -169,6 +171,7 @@
                                             @if($orden->estado === 'Pendiente') progress-fill-pendiente
                                             @elseif($orden->estado === 'En proceso') progress-fill-proceso
                                             @elseif($orden->estado === 'Cancelado') progress-fill-cancelado
+                                            @elseif($orden->estado === 'En espera') progress-fill-en-espera
                                             @else progress-fill-terminado @endif"
                                             style="width: {{ $orden->avance }}%;"></div>
                                     </div>
@@ -186,7 +189,7 @@
                             </td>
                             <td style="text-align: center;" onclick="event.stopPropagation();">
                                 @if($orden->brief)
-                                    <a href="/storage/{{ $orden->brief }}" target="_blank" class="btn-view-brief">Ver Brief</a>
+                                    <a href="/storage/{{ $orden->brief }}" target="_blank" class="btn-view-brief">Ver Plano</a>
                                 @else
                                     <span style="color: var(--text-muted); font-weight: bold;">-</span>
                                 @endif
@@ -301,7 +304,7 @@
                         <div id="detail-entregar-a" class="detail-val">-</div>
                     </div>
                     <div class="detail-item">
-                        <div class="detail-label">Brief / Diseño</div>
+                        <div class="detail-label">Plano / Diseño</div>
                         <div id="detail-brief" class="detail-val brief-container">-</div>
                     </div>
                 </div>
@@ -417,7 +420,7 @@
         
         const briefDiv = document.getElementById('detail-brief');
         if (order.brief) {
-            briefDiv.innerHTML = `<a href="${storageBaseUrl}/${order.brief}" target="_blank" class="btn-view-brief">Ver Brief</a>`;
+            briefDiv.innerHTML = `<a href="${storageBaseUrl}/${order.brief}" target="_blank" class="btn-view-brief">Ver Plano</a>`;
         } else {
             briefDiv.textContent = '-';
         }
@@ -465,7 +468,7 @@
 
         let filtered = [];
         if (activeFilter === 'activas') {
-            filtered = orders.filter(o => o.estado === 'Pendiente' || o.estado === 'En proceso');
+            filtered = orders.filter(o => o.estado === 'Pendiente' || o.estado === 'En proceso' || o.estado === 'En espera');
         } else if (activeFilter === 'todos') {
             filtered = orders;
         } else {
@@ -519,11 +522,13 @@
             if (orden.estado === 'En proceso') statusBadgeClass = 'badge-proceso';
             else if (orden.estado === 'Terminado') statusBadgeClass = 'badge-terminado';
             else if (orden.estado === 'Cancelado') statusBadgeClass = 'badge-cancelado';
+            else if (orden.estado === 'En espera') statusBadgeClass = 'badge-en-espera';
 
             let progressFillClass = 'progress-fill-pendiente';
             if (orden.estado === 'En proceso') progressFillClass = 'progress-fill-proceso';
             else if (orden.estado === 'Terminado') progressFillClass = 'progress-fill-terminado';
             else if (orden.estado === 'Cancelado') progressFillClass = 'progress-fill-cancelado';
+            else if (orden.estado === 'En espera') progressFillClass = 'progress-fill-en-espera';
 
             let delDateStr = '-';
             let delTimeStr = '-';
@@ -549,7 +554,7 @@
 
             let briefHtml = '<span style="color: var(--text-muted); font-weight: bold;">-</span>';
             if (orden.brief) {
-                briefHtml = `<a href="${storageBaseUrl}/${orden.brief}" target="_blank" class="btn-view-brief">Ver Brief</a>`;
+                briefHtml = `<a href="${storageBaseUrl}/${orden.brief}" target="_blank" class="btn-view-brief">Ver Plano</a>`;
             }
 
             const isActive = selectedOrderId === orden.id ? 'active' : '';

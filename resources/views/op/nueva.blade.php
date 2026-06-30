@@ -16,7 +16,14 @@
         <p style="color: var(--text-muted); font-size: 1rem; max-width: 650px; margin: 0 auto 20px auto; line-height: 1.6;">
             Bienvenido al módulo de registro oficial de requerimientos. Ingrese los detalles de la Orden de Producción (OP) a continuación; toda la información ingresada se sincronizará automáticamente y se proyectará en tiempo real en los monitores operativos de producción.
         </p>
-        <div style="display: flex; justify-content: center; gap: 15px;">
+        <div style="display: flex; justify-content: center; gap: 15px; flex-wrap: wrap;">
+            @if(in_array(session('user_role'), ['admin', 'admin_branding', 'admin_promo']))
+                <a href="{{ route('op.admin') }}" class="btn-secondary" style="padding: 8px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; background: rgba(255, 255, 255, 0.05); color: var(--text-white); border: 1px solid var(--border-glass); display: inline-flex; align-items: center;">Volver al Panel Admin</a>
+            @elseif(session('user_role') === 'jefe_ventas')
+                <a href="{{ route('op.jefe_ventas') }}" class="btn-secondary" style="padding: 8px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; background: rgba(255, 255, 255, 0.05); color: var(--text-white); border: 1px solid var(--border-glass); display: inline-flex; align-items: center;">Volver al Panel Jefe</a>
+            @elseif(session('user_role') === 'ventas')
+                <a href="{{ route('op.mis_ordenes') }}" class="btn-secondary" style="padding: 8px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; background: rgba(255, 255, 255, 0.05); color: var(--text-white); border: 1px solid var(--border-glass); display: inline-flex; align-items: center;">Volver a Mis Órdenes</a>
+            @endif
             <a href="{{ route('logout') }}" class="btn-logout" style="padding: 8px 24px;">Salir del Portal</a>
         </div>
     </div>
@@ -34,9 +41,15 @@
                 <div class="form-group">
                     <label for="categoria">Categoría *</label>
                     <select id="categoria" name="categoria" required>
-                        <option value="" disabled {{ old('categoria') ? '' : 'selected' }}>Seleccione una categoría</option>
-                        <option value="Branding" {{ old('categoria') === 'Branding' ? 'selected' : '' }}>Branding</option>
-                        <option value="Promocional" {{ old('categoria') === 'Promocional' ? 'selected' : '' }}>Promocional</option>
+                        @if(session('user_role') === 'admin_branding')
+                            <option value="Branding" selected>Branding</option>
+                        @elseif(session('user_role') === 'admin_promo')
+                            <option value="Promocional" selected>Promocional</option>
+                        @else
+                            <option value="" disabled {{ old('categoria') ? '' : 'selected' }}>Seleccione una categoría</option>
+                            <option value="Branding" {{ old('categoria') === 'Branding' ? 'selected' : '' }}>Branding</option>
+                            <option value="Promocional" {{ old('categoria') === 'Promocional' ? 'selected' : '' }}>Promocional</option>
+                        @endif
                     </select>
                     @error('categoria')
                         <span style="color: var(--priority-urgente); font-size: 0.8rem;">{{ $message }}</span>
@@ -115,10 +128,10 @@
 
             <!-- Brief File Upload -->
             <div class="form-group">
-                <label for="brief">Subir Brief / Diseño *</label>
-                <input type="file" id="brief" name="brief" class="form-control" accept=".pdf,.ppt,.pptx,.zip,.jpg,.jpeg,.png,.ai,.psd">
+                <label for="brief">Subir Plano / Diseño *</label>
+                <input type="file" id="brief" name="brief" class="form-control" accept=".pdf,.ppt,.pptx,.zip,.jpg,.jpeg,.png,.ai,.psd,.xls,.xlsx,.csv">
                 <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 5px; line-height: 1.4;">
-                    Formatos permitidos: PDF, PPT, PPTX, ZIP, JPG, PNG, AI, PSD <br>
+                    Formatos permitidos: PDF, PPT, PPTX, ZIP, JPG, PNG, AI, PSD, XLS, XLSX, CSV <br>
                     Tamaño máximo: 100 MB
                 </p>
                 @error('brief')
@@ -231,7 +244,7 @@
                 if (this.files && this.files[0]) {
                     const file = this.files[0];
                     const fileSizeMB = file.size / (1024 * 1024);
-                    const validExtensions = ['pdf', 'ppt', 'pptx', 'zip', 'jpg', 'jpeg', 'png', 'ai', 'psd'];
+                    const validExtensions = ['pdf', 'ppt', 'pptx', 'zip', 'jpg', 'jpeg', 'png', 'ai', 'psd', 'xls', 'xlsx', 'csv'];
                     const extension = file.name.split('.').pop().toLowerCase();
  
                     if (fileSizeMB > 100) {
@@ -240,7 +253,7 @@
                         return;
                     }
                     if (!validExtensions.includes(extension)) {
-                        alert('El formato del archivo no está permitido. Formatos válidos: PDF, PPT, PPTX, ZIP, JPG, PNG, AI, PSD');
+                        alert('El formato del archivo no está permitido. Formatos válidos: PDF, PPT, PPTX, ZIP, JPG, PNG, AI, PSD, XLS, XLSX, CSV');
                         this.value = ''; // clear input
                         return;
                     }

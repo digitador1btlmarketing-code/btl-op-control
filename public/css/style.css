@@ -22,6 +22,7 @@
     --state-pendiente: #f3a63b;
     --state-en-proceso: #00d2ff;
     --state-terminado: #00f2c3;
+    --state-en-espera: #a78bfa;
     
     --font-primary: 'Outfit', sans-serif;
     --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
@@ -64,6 +65,8 @@
     --border-badge-proxima: rgba(255, 141, 114, 0.2);
     --bg-badge-normal: rgba(0, 210, 255, 0.1);
     --border-badge-normal: rgba(0, 210, 255, 0.2);
+    --bg-badge-en-espera: rgba(167, 139, 250, 0.15);
+    --border-badge-en-espera: rgba(167, 139, 250, 0.3);
     --text-cancelado: #a0aec0;
 
     /* Buttons variables */
@@ -116,6 +119,7 @@
     --state-pendiente: #d97706;
     --state-en-proceso: #0052cc;
     --state-terminado: #10b981;
+    --state-en-espera: #7c3aed;
 
     /* Light Mode Overrides */
     --bg-gradient: 
@@ -154,6 +158,8 @@
     --border-badge-proxima: rgba(249, 115, 22, 0.18);
     --bg-badge-normal: rgba(0, 82, 204, 0.08);
     --border-badge-normal: rgba(0, 82, 204, 0.15);
+    --bg-badge-en-espera: rgba(124, 58, 237, 0.08);
+    --border-badge-en-espera: rgba(124, 58, 237, 0.18);
     --text-cancelado: #4b5563;
 
     /* Buttons variables */
@@ -475,6 +481,12 @@ input[type="file"]::file-selector-button:hover {
     gap: 15px;
 }
 
+.grid-6 {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 15px;
+}
+
 /* KPI Badges / Cards */
 .kpi-card {
     background: var(--bg-kpi);
@@ -500,6 +512,7 @@ input[type="file"]::file-selector-button:hover {
 .kpi-card.process::before { background: var(--state-en-proceso); }
 .kpi-card.finished::before { background: var(--state-terminado); }
 .kpi-card.urgent::before { background: var(--priority-urgente); }
+.kpi-card.waiting::before { background: var(--state-en-espera); }
 
 .kpi-value {
     font-size: 2.2rem;
@@ -597,6 +610,12 @@ tbody tr:hover {
     border-color: var(--border-badge-cancelado);
 }
 
+.badge-en-espera {
+    background: var(--bg-badge-en-espera);
+    color: var(--state-en-espera);
+    border-color: var(--border-badge-en-espera);
+}
+
 .badge-urgente {
     background: var(--bg-badge-urgente);
     color: var(--priority-urgente);
@@ -658,6 +677,11 @@ tbody tr:hover {
     width: 0%;
     background: #6c757d;
     box-shadow: none;
+}
+
+.progress-fill-en-espera {
+    background: var(--state-en-espera);
+    box-shadow: 0 0 8px rgba(167, 139, 250, 0.3);
 }
 
 .progress-text {

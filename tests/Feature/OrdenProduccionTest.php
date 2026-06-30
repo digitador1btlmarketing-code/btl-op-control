@@ -576,4 +576,236 @@ class OrdenProduccionTest extends TestCase
         $this->assertNotEmpty($data['recent_events']);
         $this->assertEquals('cambio_estado', $data['recent_events'][0]['tipo_evento']);
     }
+
+    /**
+     * Test En espera status does not override progress.
+     */
+    public function test_en_espera_status_and_progress_preservation(): void
+    {
+        $op = OrdenProduccion::create([
+            'categoria' => 'Branding',
+            'numero_op' => 'OP-Preserve-1',
+            'proyecto' => 'Test',
+            'presupuestista' => 'Test',
+            'cliente' => 'Test',
+            'marca' => 'Test',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '12:00:00',
+            'prioridad' => 'NORMAL',
+            'estado' => 'En proceso', // Avance = 50%
+            'entregar_a' => 'Cliente',
+            'creado_por_codigo' => 'ADMIN-PROD-2026',
+            'creado_por_nombre' => 'ADMIN',
+            'creado_por_rol' => 'admin',
+        ]);
+
+        $this->assertEquals(50, $op->avance);
+
+        $op->update(['estado' => 'En espera']);
+        $this->assertEquals('En espera', $op->fresh()->estado);
+        $this->assertEquals(50, $op->fresh()->avance);
+    }
+
+    /**
+     * Test a user cannot approve/reject their own request.
+     */
+    public function test_self_approval_and_rejection_is_blocked(): void
+    {
+        $op = OrdenProduccion::create([
+            'categoria' => 'Branding',
+            'numero_op' => 'OP-Self-App-1',
+            'proyecto' => 'Test',
+            'presupuestista' => 'Test',
+            'cliente' => 'Test',
+            'marca' => 'Test',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '12:00:00',
+            'prioridad' => 'NORMAL',
+            'estado' => 'Pendiente',
+            'entregar_a' => 'Cliente',
+            'creado_por_codigo' => 'DAFNE-RAMIREZ-PROD-2026',
+            'creado_por_nombre' => 'DAFNE',
+            'creado_por_rol' => 'ventas',
+        ]);
+
+        $solicitud = \App\Models\SolicitudCambioFecha::create([
+            'orden_produccion_id' => $op->id,
+            'fecha_actual' => $op->fecha_entrega,
+            'hora_actual' => $op->hora_entrega,
+            'fecha_solicitada' => Carbon::tomorrow()->addDay()->format('Y-m-d'),
+            'hora_solicitada' => '14:00:00',
+            'razon_solicitud' => 'Razón de test',
+            'solicitado_por_codigo' => 'DAFNE-RAMIREZ-PROD-2026',
+            'solicitado_por_nombre' => 'DAFNE',
+            'estado_solicitud' => 'Pendiente',
+            'fecha_solicitud' => now(),
+        ]);
+
+        session([
+            'user_role' => 'ventas',
+            'user_code' => 'DAFNE-RAMIREZ-PROD-2026',
+            'user_name' => 'DAFNE',
+        ]);
+
+        $response = $this->postJson(route('jefe.cambio_fecha.aprobar', $solicitud->id));
+        $response->assertStatus(403);
+
+        $response = $this->postJson(route('jefe.cambio_fecha.rechazar', $solicitud->id), [
+            'razon_rechazo' => 'Rechazo automático'
+        ]);
+        $response->assertStatus(403);
+    }
+
+    /**
+     * Test symmetric approval flow rules.
+     */
+    public function test_symmetric_approval_matrix(): void
+    {
+        $op = OrdenProduccion::create([
+            'categoria' => 'Branding',
+            'numero_op' => 'OP-Sym-1',
+            'proyecto' => 'Test',
+            'presupuestista' => 'Test',
+            'cliente' => 'Test',
+            'marca' => 'Test',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '12:00:00',
+            'prioridad' => 'NORMAL',
+            'estado' => 'Pendiente',
+            'entregar_a' => 'Cliente',
+            'creado_por_codigo' => 'DAFNE-RAMIREZ-PROD-2026',
+            'creado_por_nombre' => 'DAFNE',
+            'creado_por_rol' => 'ventas',
+        ]);
+
+        // Request by sales user
+        $solicitud1 = \App\Models\SolicitudCambioFecha::create([
+            'orden_produccion_id' => $op->id,
+            'fecha_actual' => $op->fecha_entrega,
+            'hora_actual' => $op->hora_entrega,
+            'fecha_solicitada' => Carbon::tomorrow()->addDay()->format('Y-m-d'),
+            'hora_solicitada' => '14:00:00',
+            'razon_solicitud' => 'Test',
+            'solicitado_por_codigo' => 'DAFNE-RAMIREZ-PROD-2026',
+            'solicitado_por_nombre' => 'DAFNE',
+            'estado_solicitud' => 'Pendiente',
+            'fecha_solicitud' => now(),
+        ]);
+
+        // Mock session as admin branding (OP is Branding category, so admin_branding can approve)
+        session([
+            'user_role' => 'admin_branding',
+            'user_code' => 'ADMIN-BRANDING-2026',
+            'user_name' => 'BRANDING ADMIN',
+        ]);
+
+        $response = $this->postJson(route('jefe.cambio_fecha.aprobar', $solicitud1->id));
+        $response->assertStatus(200);
+        $this->assertEquals('Aprobada', $solicitud1->fresh()->estado_solicitud);
+
+        // Reset and request by admin
+        $solicitud2 = \App\Models\SolicitudCambioFecha::create([
+            'orden_produccion_id' => $op->id,
+            'fecha_actual' => $op->fecha_entrega,
+            'hora_actual' => $op->hora_entrega,
+            'fecha_solicitada' => Carbon::tomorrow()->addDays(2)->format('Y-m-d'),
+            'hora_solicitada' => '15:00:00',
+            'razon_solicitud' => 'Test admin',
+            'solicitado_por_codigo' => 'ADMIN-BRANDING-2026',
+            'solicitado_por_nombre' => 'BRANDING ADMIN',
+            'estado_solicitud' => 'Pendiente',
+            'fecha_solicitud' => now(),
+        ]);
+
+        // Mock session as vendor creator
+        session([
+            'user_role' => 'ventas',
+            'user_code' => 'DAFNE-RAMIREZ-PROD-2026',
+            'user_name' => 'DAFNE',
+        ]);
+
+        $response = $this->postJson(route('jefe.cambio_fecha.aprobar', $solicitud2->id));
+        $response->assertStatus(200);
+        $this->assertEquals('Aprobada', $solicitud2->fresh()->estado_solicitud);
+    }
+
+    /**
+     * Test creation route access middleware for category admins.
+     */
+    public function test_creation_route_category_admins_access(): void
+    {
+        // Test admin_branding has access
+        session([
+            'user_role' => 'admin_branding',
+            'user_code' => 'ADMIN-BRAND-TEST',
+            'user_name' => 'Brand Admin',
+        ]);
+        $response = $this->get(route('op.create'));
+        $response->assertStatus(200);
+
+        // Test admin_promo has access
+        session([
+            'user_role' => 'admin_promo',
+            'user_code' => 'ADMIN-PROMO-TEST',
+            'user_name' => 'Promo Admin',
+        ]);
+        $response = $this->get(route('op.create'));
+        $response->assertStatus(200);
+    }
+
+    /**
+     * Test only authorized pending solicitudes show up in user lists.
+     */
+    public function test_solicitudes_tray_filtering(): void
+    {
+        $op = OrdenProduccion::create([
+            'categoria' => 'Branding',
+            'numero_op' => 'OP-Tray-1',
+            'proyecto' => 'Test',
+            'presupuestista' => 'Test',
+            'cliente' => 'Test',
+            'marca' => 'Test',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '12:00:00',
+            'prioridad' => 'NORMAL',
+            'estado' => 'Pendiente',
+            'entregar_a' => 'Cliente',
+            'creado_por_codigo' => 'DAFNE-RAMIREZ-PROD-2026',
+            'creado_por_nombre' => 'DAFNE',
+            'creado_por_rol' => 'ventas',
+        ]);
+
+        $solicitud = \App\Models\SolicitudCambioFecha::create([
+            'orden_produccion_id' => $op->id,
+            'fecha_actual' => $op->fecha_entrega,
+            'hora_actual' => $op->hora_entrega,
+            'fecha_solicitada' => Carbon::tomorrow()->addDay()->format('Y-m-d'),
+            'hora_solicitada' => '14:00:00',
+            'razon_solicitud' => 'Test tray',
+            'solicitado_por_codigo' => 'DAFNE-RAMIREZ-PROD-2026',
+            'solicitado_por_nombre' => 'DAFNE',
+            'estado_solicitud' => 'Pendiente',
+            'fecha_solicitud' => now(),
+        ]);
+
+        // Mock as solicitor (DAFNE): tray should NOT show her own request
+        session([
+            'user_role' => 'ventas',
+            'user_code' => 'DAFNE-RAMIREZ-PROD-2026',
+            'user_name' => 'DAFNE',
+        ]);
+        $response = $this->get(route('op.mis_ordenes'));
+        $response->assertStatus(200);
+        $this->assertCount(0, $response->viewData('solicitudes'));
+
+        // Mock as admin branding: tray should show the request
+        session([
+            'user_role' => 'admin_branding',
+            'user_code' => 'ADMIN-BRAND-TEST',
+            'user_name' => 'Brand Admin',
+        ]);
+        $response = $this->get(route('op.admin'));
+        $response->assertStatus(200);
+        $this->assertCount(1, $response->viewData('solicitudes'));
+    }
 }

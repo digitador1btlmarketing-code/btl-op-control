@@ -42,6 +42,7 @@ class OrdenProduccion extends Model
         'dias_restantes',
         'prioridad',
         'mostrar_fuego',
+        'creado_por_jefe_codigo',
     ];
 
     protected $casts = [
@@ -61,6 +62,8 @@ class OrdenProduccion extends Model
                 $orden->avance = 100;
             } elseif ($orden->estado === 'Cancelado') {
                 $orden->avance = 0;
+            } elseif ($orden->estado === 'En espera') {
+                $orden->avance = $orden->avance ?? 0;
             }
         });
     }
@@ -119,6 +122,15 @@ class OrdenProduccion extends Model
             return false;
         }
         return $dias < 3;
+    }
+
+    /**
+     * Get the code of the creator's jefe.
+     */
+    public function getCreadoPorJefeCodigoAttribute()
+    {
+        $creator = \App\Models\UsuarioAcceso::where('codigo', $this->creado_por_codigo)->first();
+        return $creator ? $creator->jefe_codigo : null;
     }
 
     /**

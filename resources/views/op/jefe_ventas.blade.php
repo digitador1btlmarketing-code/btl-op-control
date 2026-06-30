@@ -24,7 +24,7 @@
 </div>
 
 <!-- KPIs Grid -->
-<div class="grid-5" style="margin-bottom: 25px;">
+<div class="grid-6" style="margin-bottom: 25px;">
     <div class="kpi-card">
         <div id="kpi-total" class="kpi-value">{{ $kpis['total'] }}</div>
         <div class="kpi-label">Total Órdenes</div>
@@ -36,6 +36,10 @@
     <div class="kpi-card process">
         <div id="kpi-en-proceso" class="kpi-value" style="color: var(--state-en-proceso);">{{ $kpis['en_proceso'] }}</div>
         <div class="kpi-label">En Proceso</div>
+    </div>
+    <div class="kpi-card waiting">
+        <div id="kpi-en-espera" class="kpi-value" style="color: var(--state-en-espera);">{{ $ordenes->where('estado', 'En espera')->count() }}</div>
+        <div class="kpi-label">En Espera</div>
     </div>
     <div class="kpi-card finished">
         <div id="kpi-terminadas" class="kpi-value" style="color: var(--state-terminado);">{{ $kpis['terminadas'] }}</div>
@@ -81,10 +85,13 @@
                                 <td>
                                     <div style="display: flex; gap: 5px;">
                                         <button onclick="approveRequest({{ $req->id }})" class="btn-save-inline" style="background: rgba(0, 242, 195, 0.15); border-color: rgba(0, 242, 195, 0.3); color: var(--green-lime);">
-                                            Aprobar
+                                            Aceptar cambio
                                         </button>
                                         <button onclick="openRejectRequestModal({{ $req->id }})" class="btn-logout" style="padding: 4px 10px; font-size: 0.8rem; cursor: pointer; background: rgba(255, 51, 102, 0.15); border-color: rgba(255, 51, 102, 0.3);">
-                                            Rechazar
+                                            Rechazar cambio
+                                        </button>
+                                        <button onclick="selectOrder({{ $req->orden_produccion_id }})" class="btn-save-inline" style="background: rgba(0, 210, 255, 0.15); border-color: rgba(0, 210, 255, 0.3); color: var(--blue-bright);">
+                                            Ver detalle
                                         </button>
                                     </div>
                                 </td>
@@ -120,6 +127,7 @@
                 <option value="activas" selected>Todas Activas</option>
                 <option value="Pendiente">Pendientes</option>
                 <option value="En proceso">En proceso</option>
+                <option value="En espera">En espera</option>
                 <option value="Terminado">Terminadas</option>
                 <option value="Cancelado">Canceladas</option>
             </select>
@@ -150,7 +158,8 @@
                         $badgeCategoryClass = $orden->categoria === 'Branding' ? 'badge-normal' : 'badge-proxima';
                         $progressFillClass = $orden->estado === 'Pendiente' ? 'progress-fill-pendiente' :
                                               ($orden->estado === 'En proceso' ? 'progress-fill-proceso' :
-                                              ($orden->estado === 'Cancelado' ? 'progress-fill-cancelado' : 'progress-fill-terminado'));
+                                              ($orden->estado === 'Cancelado' ? 'progress-fill-cancelado' :
+                                              ($orden->estado === 'En espera' ? 'progress-fill-en-espera' : 'progress-fill-terminado')));
                     @endphp
                     <tr class="admin-row" id="row-{{ $orden->id }}" onclick="selectOrder({{ $orden->id }})" data-id="{{ $orden->id }}" data-estado="{{ $orden->estado }}" data-prioridad="{{ $orden->prioridad }}" data-numero-op="{{ $orden->numero_op }}" data-categoria="{{ $orden->categoria }}">
                         <td>
@@ -191,6 +200,7 @@
                                 if ($orden->estado === 'En proceso') $statusBadgeClass = 'badge-proceso';
                                 if ($orden->estado === 'Terminado') $statusBadgeClass = 'badge-terminado';
                                 if ($orden->estado === 'Cancelado') $statusBadgeClass = 'badge-cancelado';
+                                if ($orden->estado === 'En espera') $statusBadgeClass = 'badge-en-espera';
                             @endphp
                             <span class="badge {{ $statusBadgeClass }}">{{ $orden->estado }}</span>
                         </td>
@@ -339,7 +349,7 @@
             <div id="detail-entregar-a" class="detail-val">-</div>
         </div>
         <div class="detail-item">
-            <div class="detail-label">Brief / Diseño</div>
+            <div class="detail-label">Plano / Diseño</div>
             <div id="detail-brief" class="detail-val brief-container">-</div>
         </div>
     </div>
@@ -363,10 +373,18 @@
         </div>
     </div>
 
-    <div style="margin-top: 15px; border-top: 1px solid var(--border-glass); padding-top: 15px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-        <a id="btn-download-pdf-op" href="#" target="_blank" class="btn-secondary" style="width: auto; padding: 8px 16px; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; background: rgba(0, 210, 255, 0.1); border-color: rgba(0, 210, 255, 0.2); color: var(--blue-bright);">
-            📄 Descargar PDF OP
-        </a>
+    <!-- Date change request section in details -->
+    <div id="detail-date-change-section" style="margin-top: 15px; border-top: 1px solid var(--border-glass); padding-top: 15px;">
+        <h4 style="font-size: 1.05rem; color: var(--blue-bright); margin-bottom: 10px; font-weight: 700;">Solicitud de Cambio de Fecha</h4>
+        <div id="detail-date-change-status" style="margin-bottom: 10px; font-size: 0.9rem; line-height: 1.4;"></div>
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <a id="btn-download-pdf-op" href="#" target="_blank" class="btn-secondary" style="width: auto; padding: 8px 16px; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; background: rgba(0, 210, 255, 0.1); border-color: rgba(0, 210, 255, 0.2); color: var(--blue-bright);">
+                📄 Descargar PDF OP
+            </a>
+            <button id="btn-request-date-change" onclick="openRequestDateChangeModal()" class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 0.85rem; display: none;">
+                Solicitar cambio de fecha
+            </button>
+        </div>
     </div>
 
     <!-- Timeline of events (History) -->
@@ -461,6 +479,52 @@
     </div>
 </div>
 
+<!-- Request Date Change Modal -->
+<div id="request-date-change-modal" class="custom-modal-overlay hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-modal-overlay); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 10000; transition: var(--transition);">
+    <div class="card" style="max-width: 500px; width: 90%; border-color: var(--border-glass); box-shadow: var(--card-shadow); padding: 30px; margin-bottom: 0; text-align: left;">
+        <h3 style="font-size: 1.3rem; font-weight: 800; color: var(--blue-bright); margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
+            📅 Solicitar Cambio de Fecha
+        </h3>
+        
+        <form id="request-date-change-form" onsubmit="submitDateChangeRequest(event)">
+            @csrf
+            <input type="hidden" name="orden_produccion_id" id="change-op-id">
+            
+            <div class="grid-2" style="margin-bottom: 15px;">
+                <div class="form-group">
+                    <label style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase;">Fecha Actual</label>
+                    <input type="text" id="change-fecha-actual" class="form-control" disabled style="background: rgba(255,255,255,0.05); text-align: center;">
+                </div>
+                <div class="form-group">
+                    <label style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase;">Hora Actual</label>
+                    <input type="text" id="change-hora-actual" class="form-control" disabled style="background: rgba(255,255,255,0.05); text-align: center;">
+                </div>
+            </div>
+            
+            <div class="grid-2" style="margin-bottom: 15px;">
+                <div class="form-group">
+                    <label for="fecha_solicitada" style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase;">Nueva Fecha *</label>
+                    <input type="date" name="fecha_solicitada" id="fecha_solicitada" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="hora_solicitada" style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase;">Nueva Hora *</label>
+                    <input type="time" name="hora_solicitada" id="hora_solicitada" class="form-control" required>
+                </div>
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 20px;">
+                <label for="razon_solicitud" style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase;">Razón del Cambio *</label>
+                <textarea name="razon_solicitud" id="razon_solicitud" class="form-control" rows="3" placeholder="Escriba la razón de forma detallada..." required style="resize: none;"></textarea>
+            </div>
+            
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button type="button" onclick="closeRequestDateChangeModal()" class="filter-btn" style="padding: 10px 20px; width: auto; font-weight: 600;">Cancelar</button>
+                <button type="submit" class="btn-primary" style="width: auto; padding: 10px 25px; font-weight: 700;">Enviar Solicitud</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- History Modal -->
 <div id="history-modal" class="custom-modal-overlay hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-modal-overlay); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 10000; transition: var(--transition);">
     <div class="card" style="max-width: 650px; width: 90%; border-color: var(--border-glass); box-shadow: var(--card-shadow); padding: 30px; margin-bottom: 0; text-align: left; position: relative;">
@@ -484,6 +548,8 @@
 
 @section('scripts')
 <script>
+    const loggedInUserCode = "{{ session('user_code') }}";
+    const loggedInUserRole = "{{ session('user_role') }}";
     let activeCategory = 'todos';
     let selectedOrderId = null;
     let allOrders = @json($ordenes);
@@ -533,6 +599,66 @@
         document.getElementById('reject-request-modal').classList.add('hidden');
     }
 
+    // Modal: Request change date
+    function openRequestDateChangeModal() {
+        const order = allOrders.find(o => o.id === selectedOrderId);
+        if (!order) return;
+        
+        document.getElementById('change-op-id').value = order.id;
+        
+        // Parse actual dates
+        let dateVal = '-';
+        if (order.fecha_entrega) {
+            const parts = order.fecha_entrega.split('-');
+            dateVal = `${parts[2]}/${parts[1]}/${parts[0]}`;
+        }
+        document.getElementById('change-fecha-actual').value = dateVal;
+        document.getElementById('change-hora-actual').value = order.hora_entrega ? order.hora_entrega.substring(0, 5) : '-';
+        
+        // Clear requested fields
+        document.getElementById('fecha_solicitada').value = '';
+        document.getElementById('hora_solicitada').value = '';
+        document.getElementById('razon_solicitud').value = '';
+        
+        document.getElementById('request-date-change-modal').classList.remove('hidden');
+    }
+
+    function closeRequestDateChangeModal() {
+        document.getElementById('request-date-change-modal').classList.add('hidden');
+    }
+
+    function submitDateChangeRequest(event) {
+        event.preventDefault();
+        
+        const form = document.getElementById('request-date-change-form');
+        const formData = new FormData(form);
+        
+        fetch('{{ route("op.solicitar_cambio_fecha") }}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                showToast(data.message, 'success');
+                closeRequestDateChangeModal();
+                pollJefeUpdates();
+                hideDetail();
+            } else {
+                showToast(data.message, 'error');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            showToast('Error de red al enviar la solicitud.', 'error');
+        });
+    }
+
     // Filter Logic
     function selectCategoryTab(category) {
         activeCategory = category;
@@ -569,7 +695,7 @@
 
             let matchesFilter = false;
             if (filterVal === 'activas') {
-                matchesFilter = (estado === 'Pendiente' || estado === 'En proceso');
+                matchesFilter = (estado === 'Pendiente' || estado === 'En proceso' || estado === 'En espera');
             } else if (filterVal === 'todos') {
                 matchesFilter = true;
             } else {
@@ -671,6 +797,7 @@
         if (order.estado === 'En proceso') statusBadgeClass = 'badge-proceso';
         if (order.estado === 'Terminado') statusBadgeClass = 'badge-terminado';
         if (order.estado === 'Cancelado') statusBadgeClass = 'badge-cancelado';
+        if (order.estado === 'En espera') statusBadgeClass = 'badge-en-espera';
         document.getElementById('detail-estado').innerHTML = `<span class="badge ${statusBadgeClass}">${order.estado}</span>`;
         
         document.getElementById('detail-avance').textContent = `${order.avance}%`;
@@ -678,7 +805,7 @@
         
         const briefDiv = document.getElementById('detail-brief');
         if (order.brief) {
-            briefDiv.innerHTML = `<a href="/op/descargar-brief/${order.id}" target="_blank" class="btn-view-brief" style="background: rgba(0, 210, 255, 0.15); color: var(--blue-bright); border: 1px solid rgba(0, 210, 255, 0.3); padding: 4px 10px; border-radius: 6px; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 5px;">Ver Brief</a>`;
+            briefDiv.innerHTML = `<a href="/op/descargar-brief/${order.id}" target="_blank" class="btn-view-brief" style="background: rgba(0, 210, 255, 0.15); color: var(--blue-bright); border: 1px solid rgba(0, 210, 255, 0.3); padding: 4px 10px; border-radius: 6px; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 5px;">Ver Plano</a>`;
         } else {
             briefDiv.textContent = '-';
         }
@@ -718,7 +845,61 @@
             instSection.classList.add('hidden');
         }
 
-        // Timeline of history loading is now handled inside the collapsible history modal
+        // Date Change Request status
+        const statusDiv = document.getElementById('detail-date-change-status');
+        const btnChange = document.getElementById('btn-request-date-change');
+        if (order.solicitud_pendiente) {
+            const req = order.solicitud_pendiente;
+            const newDate = req.fecha_solicitada.split('-').reverse().join('/');
+            const newTime = req.hora_solicitada.substring(0, 5);
+            
+            // Authorization logic
+            const isSolicitor = (req.solicitado_por_codigo === loggedInUserCode);
+            let isAuthorized = false;
+            if (!isSolicitor) {
+                const solicitorRol = req.solicitado_por_rol;
+                if (solicitorRol === 'jefe_ventas' || solicitorRol === 'ventas') {
+                    if (loggedInUserRole === 'admin') {
+                        isAuthorized = true;
+                    } else if (loggedInUserRole === 'admin_branding' && order.categoria === 'Branding') {
+                        isAuthorized = true;
+                    } else if (loggedInUserRole === 'admin_promo' && order.categoria === 'Promocional') {
+                        isAuthorized = true;
+                    }
+                } else if (['admin', 'admin_promo', 'admin_branding'].includes(solicitorRol)) {
+                    if (loggedInUserRole === 'ventas' && order.creado_por_codigo === loggedInUserCode) {
+                        isAuthorized = true;
+                    } else if (loggedInUserRole === 'jefe_ventas') {
+                        const isCreatorVendorOfJefe = (order.creado_por_jefe_codigo === loggedInUserCode);
+                        if (order.creado_por_codigo === loggedInUserCode || order.creado_por_codigo === 'ADMIN-PROD-2026' || isCreatorVendorOfJefe) {
+                            isAuthorized = true;
+                        }
+                    }
+                }
+            }
+
+            statusDiv.innerHTML = `
+                <div style="background: rgba(243, 166, 59, 0.1); border: 1px solid rgba(243, 166, 59, 0.3); padding: 12px; border-radius: 8px; color: var(--state-pendiente);">
+                    <strong style="display: block; margin-bottom: 5px;">⚠️ Solicitud Pendiente</strong>
+                    Nueva fecha: <strong>${newDate} ${newTime} hrs</strong><br>
+                    Razón: <span style="font-style: italic;">"${req.razon_solicitud}"</span>
+                    ${isAuthorized ? `
+                    <div style="display: flex; gap: 8px; margin-top: 10px;">
+                        <button onclick="approveRequest(${req.id})" class="btn-save-inline" style="background: rgba(0, 242, 195, 0.15); border-color: rgba(0, 242, 195, 0.3); color: var(--green-lime); padding: 5px 12px; font-size: 0.8rem; cursor: pointer; border-radius: 4px;">
+                            Aceptar cambio
+                        </button>
+                        <button onclick="openRejectRequestModal(${req.id})" class="btn-logout" style="padding: 5px 12px; font-size: 0.8rem; cursor: pointer; background: rgba(255, 51, 102, 0.15); border-color: rgba(255, 51, 102, 0.3); border-radius: 4px; margin-bottom: 0;">
+                            Rechazar cambio
+                        </button>
+                    </div>
+                    ` : ''}
+                </div>
+            `;
+            if (btnChange) btnChange.style.display = 'none';
+        } else {
+            statusDiv.innerHTML = '';
+            if (btnChange) btnChange.style.display = 'inline-block';
+        }
     }
 
     // Approve change date
@@ -804,6 +985,7 @@
             document.getElementById('kpi-total').textContent = kpis.total;
             document.getElementById('kpi-pendientes').textContent = kpis.pendientes;
             document.getElementById('kpi-en-proceso').textContent = kpis.en_proceso;
+            document.getElementById('kpi-en-espera').textContent = kpis.en_espera;
             document.getElementById('kpi-terminadas').textContent = kpis.terminadas;
             document.getElementById('kpi-solicitudes').textContent = kpis.solicitudes_pendientes;
 
@@ -854,10 +1036,13 @@
                             <td>
                                 <div style="display: flex; gap: 5px;">
                                     <button onclick="approveRequest(${req.id})" class="btn-save-inline" style="background: rgba(0, 242, 195, 0.15); border-color: rgba(0, 242, 195, 0.3); color: var(--green-lime);">
-                                        Aprobar
+                                        Aceptar cambio
                                     </button>
                                     <button onclick="openRejectRequestModal(${req.id})" class="btn-logout" style="padding: 4px 10px; font-size: 0.8rem; cursor: pointer; background: rgba(255, 51, 102, 0.15); border-color: rgba(255, 51, 102, 0.3);">
-                                        Rechazar
+                                        Rechazar cambio
+                                    </button>
+                                    <button onclick="selectOrder(${req.orden_produccion_id})" class="btn-save-inline" style="background: rgba(0, 210, 255, 0.15); border-color: rgba(0, 210, 255, 0.3); color: var(--blue-bright);">
+                                        Ver detalle
                                     </button>
                                 </div>
                             </td>
@@ -923,12 +1108,14 @@
                 const badgeCategoryClass = orden.categoria === 'Branding' ? 'badge-normal' : 'badge-proxima';
                 const progressFillClass = orden.estado === 'Pendiente' ? 'progress-fill-pendiente' :
                                           (orden.estado === 'En proceso' ? 'progress-fill-proceso' :
-                                          (orden.estado === 'Cancelado' ? 'progress-fill-cancelado' : 'progress-fill-terminado'));
+                                          (orden.estado === 'Cancelado' ? 'progress-fill-cancelado' :
+                                          (orden.estado === 'En espera' ? 'progress-fill-en-espera' : 'progress-fill-terminado')));
                 
                 let statusBadgeClass = 'badge-pendiente';
                 if (orden.estado === 'En proceso') statusBadgeClass = 'badge-proceso';
                 if (orden.estado === 'Terminado') statusBadgeClass = 'badge-terminado';
                 if (orden.estado === 'Cancelado') statusBadgeClass = 'badge-cancelado';
+                if (orden.estado === 'En espera') statusBadgeClass = 'badge-en-espera';
 
                 row.innerHTML = `
                     <td>

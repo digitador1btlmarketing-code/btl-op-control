@@ -38,7 +38,7 @@ class OrdenProduccionController extends Controller
             'fecha_entrega' => 'required|date',
             'hora_entrega' => 'required',
             'entregar_a' => 'required|in:Cliente,Bodega,Instaladores',
-            'brief' => 'nullable|file|mimes:pdf,ppt,pptx,zip,jpg,jpeg,png,ai,psd|max:102400',
+            'brief' => 'nullable|file|mimes:pdf,ppt,pptx,zip,jpg,jpeg,png,ai,psd,xls,xlsx,csv|max:102400',
         ];
 
         // Conditional validation based on entregar_a
@@ -66,6 +66,7 @@ class OrdenProduccionController extends Controller
             'fecha_desinstalacion.required' => 'La fecha de desinstalación es obligatoria.',
             'hora_desinstalacion.required' => 'La hora de desinstalación es obligatoria.',
             'brief.max' => 'El archivo brief no debe pesar más de 100MB.',
+            'brief.mimes' => 'El archivo debe ser de un formato permitido (PDF, PPT, PPTX, ZIP, JPG, PNG, AI, PSD, XLS, XLSX, CSV).',
         ]);
 
         // Clean up installation fields if not Instaladores
@@ -121,12 +122,20 @@ class OrdenProduccionController extends Controller
             ->orderBy('hora_entrega', 'asc')
             ->get();
 
+        $solicitudes = SolicitudCambioFecha::with('ordenProduccion')
+            ->where('estado_solicitud', 'Pendiente')
+            ->get()
+            ->filter(fn($sol) => $this->canApproveOrRejectSolicitud($sol))
+            ->values();
+
         $kpis = [
             'total' => $ordenes->count(),
             'pendientes' => $ordenes->where('estado', 'Pendiente')->count(),
             'en_proceso' => $ordenes->where('estado', 'En proceso')->count(),
             'terminadas' => $ordenes->where('estado', 'Terminado')->count(),
+            'en_espera' => $ordenes->where('estado', 'En espera')->count(),
             'urgentes' => $ordenes->filter(fn($o) => $o->prioridad === 'URGENTE')->count(),
+            'solicitudes_pendientes' => $solicitudes->count(),
         ];
 
         // Fetch all users for Master Admin user management panel
@@ -141,7 +150,7 @@ class OrdenProduccionController extends Controller
                 });
         }
 
-        return view('op.admin', compact('ordenes', 'kpis', 'usuarios'));
+        return view('op.admin', compact('ordenes', 'kpis', 'usuarios', 'solicitudes'));
     }
 
     /**
@@ -151,7 +160,7 @@ class OrdenProduccionController extends Controller
     {
         $request->validate([
             'lider_produccion' => 'nullable|string|max:255',
-            'estado' => 'required|in:Pendiente,En proceso,Terminado,Cancelado',
+            'estado' => 'required|in:Pendiente,En proceso,Terminado,Cancelado,En espera',
         ]);
 
         $orden = OrdenProduccion::findOrFail($id);
@@ -290,12 +299,21 @@ class OrdenProduccionController extends Controller
             $o->append(['dias_restantes', 'prioridad', 'mostrar_fuego']);
         });
 
+        $solicitudes = SolicitudCambioFecha::with('ordenProduccion')
+            ->where('estado_solicitud', 'Pending')
+            ->orWhere('estado_solicitud', 'Pendiente')
+            ->get()
+            ->filter(fn($sol) => $this->canApproveOrRejectSolicitud($sol))
+            ->values();
+
         $kpis = [
             'total' => $ordenes->count(),
             'pendientes' => $ordenes->where('estado', 'Pendiente')->count(),
             'en_proceso' => $ordenes->where('estado', 'En proceso')->count(),
             'terminadas' => $ordenes->where('estado', 'Terminado')->count(),
+            'en_espera' => $ordenes->where('estado', 'En espera')->count(),
             'urgentes' => $ordenes->filter(fn($o) => $o->prioridad === 'URGENTE')->count(),
+            'solicitudes_pendientes' => $solicitudes->count(),
         ];
 
         // Fetch requests resolved in the last 5 minutes (filtered by admin category)
@@ -328,6 +346,7 @@ class OrdenProduccionController extends Controller
 
         return response()->json([
             'ordenes' => $ordenes,
+            'solicitudes' => $solicitudes,
             'kpis' => $kpis,
             'recent_resolutions' => $recentResolutions,
             'recent_events' => $this->getRecentEvents()
@@ -375,7 +394,14 @@ class OrdenProduccionController extends Controller
             ->get();
             
         $ordenes->load('solicitudPendiente');
-        return view('op.mis_ordenes', compact('ordenes'));
+
+        $solicitudes = SolicitudCambioFecha::with('ordenProduccion')
+            ->where('estado_solicitud', 'Pendiente')
+            ->get()
+            ->filter(fn($sol) => $this->canApproveOrRejectSolicitud($sol))
+            ->values();
+
+        return view('op.mis_ordenes', compact('ordenes', 'solicitudes'));
     }
 
     /**
@@ -394,8 +420,15 @@ class OrdenProduccionController extends Controller
             $o->append(['dias_restantes', 'prioridad', 'mostrar_fuego']);
         });
 
+        $solicitudes = SolicitudCambioFecha::with('ordenProduccion')
+            ->where('estado_solicitud', 'Pendiente')
+            ->get()
+            ->filter(fn($sol) => $this->canApproveOrRejectSolicitud($sol))
+            ->values();
+
         return response()->json([
             'ordenes' => $ordenes,
+            'solicitudes' => $solicitudes,
             'recent_events' => $this->getRecentEvents()
         ]);
     }
@@ -421,28 +454,19 @@ class OrdenProduccionController extends Controller
         ->get();
         $ordenes->load('solicitudPendiente');
 
-        // Solicitudes filter: OP created by this jefe's vendors, by this jefe, or by ADMIN-PROD-2026
+        // Solicitudes filter: using unified canApproveOrRejectSolicitud helper
         $solicitudes = SolicitudCambioFecha::with('ordenProduccion')
             ->where('estado_solicitud', 'Pendiente')
-            ->whereHas('ordenProduccion', function ($query) use ($jefeCodigo) {
-                $query->where(function ($sub) use ($jefeCodigo) {
-                    $sub->whereIn('creado_por_codigo', function ($uQuery) use ($jefeCodigo) {
-                        $uQuery->select('codigo')
-                            ->from('usuarios_acceso')
-                            ->where('jefe_codigo', $jefeCodigo);
-                    })
-                    ->orWhere('creado_por_codigo', 'ADMIN-PROD-2026')
-                    ->orWhere('creado_por_codigo', $jefeCodigo);
-                });
-            })
-            ->orderBy('fecha_solicitud', 'asc')
-            ->get();
+            ->get()
+            ->filter(fn($sol) => $this->canApproveOrRejectSolicitud($sol))
+            ->values();
 
         $kpis = [
             'total' => $ordenes->count(),
             'pendientes' => $ordenes->where('estado', 'Pendiente')->count(),
             'en_proceso' => $ordenes->where('estado', 'En proceso')->count(),
             'terminadas' => $ordenes->where('estado', 'Terminado')->count(),
+            'en_espera' => $ordenes->where('estado', 'En espera')->count(),
             'solicitudes_pendientes' => $solicitudes->count(),
         ];
 
@@ -486,25 +510,16 @@ class OrdenProduccionController extends Controller
 
         $solicitudes = SolicitudCambioFecha::with('ordenProduccion')
             ->where('estado_solicitud', 'Pendiente')
-            ->whereHas('ordenProduccion', function ($query) use ($jefeCodigo) {
-                $query->where(function ($sub) use ($jefeCodigo) {
-                    $sub->whereIn('creado_por_codigo', function ($uQuery) use ($jefeCodigo) {
-                        $uQuery->select('codigo')
-                            ->from('usuarios_acceso')
-                            ->where('jefe_codigo', $jefeCodigo);
-                    })
-                    ->orWhere('creado_por_codigo', 'ADMIN-PROD-2026')
-                    ->orWhere('creado_por_codigo', $jefeCodigo);
-                });
-            })
-            ->orderBy('fecha_solicitud', 'asc')
-            ->get();
+            ->get()
+            ->filter(fn($sol) => $this->canApproveOrRejectSolicitud($sol))
+            ->values();
 
         $kpis = [
             'total' => $ordenes->count(),
             'pendientes' => $ordenes->where('estado', 'Pendiente')->count(),
             'en_proceso' => $ordenes->where('estado', 'En proceso')->count(),
             'terminadas' => $ordenes->where('estado', 'Terminado')->count(),
+            'en_espera' => $ordenes->where('estado', 'En espera')->count(),
             'solicitudes_pendientes' => $solicitudes->count(),
         ];
 
@@ -783,16 +798,7 @@ class OrdenProduccionController extends Controller
     {
         $solicitud = SolicitudCambioFecha::where('estado_solicitud', 'Pendiente')->findOrFail($id);
         
-        // Backend verification for Jefe approval permissions
-        $jefeCodigo = session('user_code');
-        $op = OrdenProduccion::findOrFail($solicitud->orden_produccion_id);
-        $creadoPor = $op->creado_por_codigo;
-        
-        $isCreatorVendorOfJefe = UsuarioAcceso::where('codigo', $creadoPor)
-            ->where('jefe_codigo', $jefeCodigo)
-            ->exists();
-            
-        if ($creadoPor !== 'ADMIN-PROD-2026' && $creadoPor !== $jefeCodigo && !$isCreatorVendorOfJefe) {
+        if (!$this->canApproveOrRejectSolicitud($solicitud)) {
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json(['success' => false, 'message' => 'No tiene permisos para aprobar esta solicitud.'], 403);
             }
@@ -805,6 +811,7 @@ class OrdenProduccionController extends Controller
             'fecha_aprobacion' => now(),
         ]);
 
+        $op = $solicitud->ordenProduccion;
         $op->update([
             'fecha_entrega' => Carbon::parse($solicitud->fecha_solicitada)->format('Y-m-d'),
             'hora_entrega' => Carbon::parse($solicitud->hora_solicitada)->format('H:i:s'),
@@ -841,16 +848,7 @@ class OrdenProduccionController extends Controller
 
         $solicitud = SolicitudCambioFecha::where('estado_solicitud', 'Pendiente')->findOrFail($id);
         
-        // Backend verification for Jefe rejection permissions
-        $jefeCodigo = session('user_code');
-        $op = OrdenProduccion::findOrFail($solicitud->orden_produccion_id);
-        $creadoPor = $op->creado_por_codigo;
-        
-        $isCreatorVendorOfJefe = UsuarioAcceso::where('codigo', $creadoPor)
-            ->where('jefe_codigo', $jefeCodigo)
-            ->exists();
-            
-        if ($creadoPor !== 'ADMIN-PROD-2026' && $creadoPor !== $jefeCodigo && !$isCreatorVendorOfJefe) {
+        if (!$this->canApproveOrRejectSolicitud($solicitud)) {
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json(['success' => false, 'message' => 'No tiene permisos para rechazar esta solicitud.'], 403);
             }
@@ -864,6 +862,7 @@ class OrdenProduccionController extends Controller
             'fecha_rechazo' => now(),
         ]);
 
+        $op = $solicitud->ordenProduccion;
         $fechaActStr = Carbon::parse($solicitud->fecha_actual)->format('d/m/Y');
         $horaActStr = Carbon::parse($solicitud->hora_actual)->format('H:i');
         $fechaSolStr = Carbon::parse($solicitud->fecha_solicitada)->format('d/m/Y');
@@ -882,6 +881,50 @@ class OrdenProduccionController extends Controller
         }
 
         return redirect()->back()->with('success', 'Solicitud rechazada.');
+    }
+
+    /**
+     * Helper to verify if logged in user is authorized to approve/reject a solicitud.
+     */
+    private function canApproveOrRejectSolicitud($solicitud)
+    {
+        $userCode = session('user_code');
+        $userRole = session('user_role');
+
+        if ($solicitud->solicitado_por_codigo === $userCode) {
+            return false;
+        }
+
+        $solicitante = UsuarioAcceso::where('codigo', $solicitud->solicitado_por_codigo)->first();
+        $solicitanteRol = $solicitante ? $solicitante->rol : 'ventas';
+
+        $op = $solicitud->ordenProduccion;
+        if (!$op) {
+            return false;
+        }
+
+        if ($solicitanteRol === 'jefe_ventas' || $solicitanteRol === 'ventas') {
+            if ($userRole === 'admin') {
+                return true;
+            } elseif ($userRole === 'admin_branding' && $op->categoria === 'Branding') {
+                return true;
+            } elseif ($userRole === 'admin_promo' && $op->categoria === 'Promocional') {
+                return true;
+            }
+        } elseif (in_array($solicitanteRol, ['admin', 'admin_promo', 'admin_branding'])) {
+            if ($userRole === 'ventas' && $op->creado_por_codigo === $userCode) {
+                return true;
+            } elseif ($userRole === 'jefe_ventas') {
+                $isCreatorVendorOfJefe = UsuarioAcceso::where('codigo', $op->creado_por_codigo)
+                    ->where('jefe_codigo', $userCode)
+                    ->exists();
+                if ($op->creado_por_codigo === $userCode || $op->creado_por_codigo === 'ADMIN-PROD-2026' || $isCreatorVendorOfJefe) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**

@@ -10,8 +10,8 @@ Route::post('/', [AuthController::class, 'login']);
 Route::any('/logout', [AuthController::class, 'logout'])->name('logout');
 
 // Protected Routes
-// Creation page allowed for: ventas, jefe_ventas, admin
-Route::middleware('access:ventas,jefe_ventas,admin')->group(function () {
+// Creation page allowed for: ventas, jefe_ventas, admin, admin_branding, admin_promo
+Route::middleware('access:ventas,jefe_ventas,admin,admin_branding,admin_promo')->group(function () {
     Route::get('/op/nueva', [OrdenProduccionController::class, 'create'])->name('op.create');
     Route::post('/op/nueva', [OrdenProduccionController::class, 'store'])->name('op.store');
 });
@@ -21,7 +21,12 @@ Route::middleware('access:admin,admin_branding,admin_promo')->group(function () 
     Route::get('/op/admin', [OrdenProduccionController::class, 'admin'])->name('op.admin');
     Route::get('/op/admin/updates', [OrdenProduccionController::class, 'adminUpdates'])->name('op.admin.updates');
     Route::post('/op/admin/update/{id}', [OrdenProduccionController::class, 'updateQuick'])->name('op.update');
+});
+
+Route::middleware('access:admin,admin_branding,admin_promo,jefe_ventas,ventas')->group(function () {
     Route::post('/op/solicitar-cambio-fecha', [OrdenProduccionController::class, 'solicitarCambioFecha'])->name('op.solicitar_cambio_fecha');
+    Route::post('/jefe/cambio-fecha/aprobar/{id}', [OrdenProduccionController::class, 'aprobarCambioFecha'])->name('jefe.cambio_fecha.aprobar');
+    Route::post('/jefe/cambio-fecha/rechazar/{id}', [OrdenProduccionController::class, 'rechazarCambioFecha'])->name('jefe.cambio_fecha.rechazar');
 });
 
 Route::middleware('access:admin')->group(function () {
@@ -38,10 +43,6 @@ Route::middleware('access:jefe_ventas')->group(function () {
     Route::post('/jefe/usuarios/update/{id}', [OrdenProduccionController::class, 'updateUsuario'])->name('jefe.usuarios.update');
     Route::post('/jefe/usuarios/toggle/{id}', [OrdenProduccionController::class, 'toggleUsuarioVentas'])->name('jefe.usuarios.toggle');
     Route::post('/jefe/usuarios/delete/{id}', [OrdenProduccionController::class, 'deleteUsuarioVentas'])->name('jefe.usuarios.delete');
-    
-    // Solicitudes de cambio de fecha
-    Route::post('/jefe/cambio-fecha/aprobar/{id}', [OrdenProduccionController::class, 'aprobarCambioFecha'])->name('jefe.cambio_fecha.aprobar');
-    Route::post('/jefe/cambio-fecha/rechazar/{id}', [OrdenProduccionController::class, 'rechazarCambioFecha'])->name('jefe.cambio_fecha.rechazar');
 });
 
 // Vendedor routes

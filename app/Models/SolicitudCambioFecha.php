@@ -26,6 +26,10 @@ class SolicitudCambioFecha extends Model
         'fecha_rechazo',
     ];
 
+    protected $appends = [
+        'solicitado_por_rol',
+    ];
+
     protected $casts = [
         'fecha_actual' => 'date:Y-m-d',
         'fecha_solicitada' => 'date:Y-m-d',
@@ -33,6 +37,12 @@ class SolicitudCambioFecha extends Model
         'fecha_aprobacion' => 'datetime',
         'fecha_rechazo' => 'datetime',
     ];
+
+    public function getSolicitadoPorRolAttribute()
+    {
+        $user = \App\Models\UsuarioAcceso::where('codigo', $this->solicitado_por_codigo)->first();
+        return $user ? $user->rol : 'ventas';
+    }
 
     public function ordenProduccion()
     {
