@@ -17,5 +17,14 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->trustProxies(at: '*');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->render(function (\Throwable $e) {
+            return response(
+                "Exception: " . $e->getMessage() . "\n" .
+                "File: " . $e->getFile() . "\n" .
+                "Line: " . $e->getLine() . "\n" .
+                "Trace: " . $e->getTraceAsString(),
+                500,
+                ['Content-Type' => 'text/plain']
+            );
+        });
     })->create();
