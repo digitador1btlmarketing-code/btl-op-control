@@ -4,7 +4,7 @@ use Illuminate\Support\Str;
 use Pdo\Mysql;
 
 $databaseUrl = getenv('DATABASE_URL') ?: env('DATABASE_URL');
-$url = $databaseUrl ? parse_url($databaseUrl) : [];
+$databaseParts = $databaseUrl ? parse_url($databaseUrl) : [];
 
 if (env('APP_ENV') === 'production' && empty($databaseUrl)) {
     $isBuildOrClear = false;
@@ -105,11 +105,11 @@ return [
         'pgsql' => [
             'driver' => 'pgsql',
             'url' => $databaseUrl,
-            'host' => $url['host'] ?? null,
-            'port' => $url['port'] ?? 5432,
-            'database' => isset($url['path']) ? ltrim($url['path'], '/') : null,
-            'username' => $url['user'] ?? null,
-            'password' => $url['pass'] ?? null,
+            'host' => $databaseParts['host'] ?? null,
+            'port' => $databaseParts['port'] ?? 5432,
+            'database' => isset($databaseParts['path']) ? ltrim($databaseParts['path'], '/') : null,
+            'username' => $databaseParts['user'] ?? null,
+            'password' => $databaseParts['pass'] ?? null,
             'charset' => 'utf8',
             'prefix' => '',
             'prefix_indexes' => true,
