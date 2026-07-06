@@ -45,10 +45,16 @@ class AuthController extends Controller
         $codigo = strtoupper(trim($request->input('codigo_acceso')));
 
         // Check in database
-        $usuario = \Illuminate\Support\Facades\DB::table('usuarios_acceso')
-            ->where('codigo', $codigo)
-            ->where('activo', true)
-            ->first();
+        try {
+            $usuario = \Illuminate\Support\Facades\DB::table('usuarios_acceso')
+                ->where('codigo', $codigo)
+                ->where('activo', true)
+                ->first();
+        } catch (\Exception $e) {
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Error de conexión. Intente nuevamente.');
+        }
 
         if ($usuario) {
             session([

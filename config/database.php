@@ -3,23 +3,7 @@
 use Illuminate\Support\Str;
 use Pdo\Mysql;
 
-$databaseUrl = getenv('DATABASE_URL') ?: env('DATABASE_URL');
-$databaseParts = $databaseUrl ? parse_url($databaseUrl) : [];
 
-if (env('APP_ENV') === 'production' && empty($databaseUrl)) {
-    $isBuildOrClear = false;
-    if (isset($_SERVER['argv'])) {
-        foreach ($_SERVER['argv'] as $arg) {
-            if (str_contains($arg, 'package:discover') || str_contains($arg, 'config:clear') || str_contains($arg, 'optimize:clear')) {
-                $isBuildOrClear = true;
-                break;
-            }
-        }
-    }
-    if (!$isBuildOrClear) {
-        throw new \Exception('DATABASE_URL no configurada en Render.');
-    }
-}
 
 return [
 
@@ -104,12 +88,11 @@ return [
 
         'pgsql' => [
             'driver' => 'pgsql',
-            'url' => $databaseUrl,
-            'host' => $databaseParts['host'] ?? null,
-            'port' => $databaseParts['port'] ?? 5432,
-            'database' => isset($databaseParts['path']) ? ltrim($databaseParts['path'], '/') : null,
-            'username' => $databaseParts['user'] ?? null,
-            'password' => $databaseParts['pass'] ?? null,
+            'host' => env('DB_HOST'),
+            'port' => env('DB_PORT', 6543),
+            'database' => env('DB_DATABASE', 'postgres'),
+            'username' => env('DB_USERNAME'),
+            'password' => env('DB_PASSWORD'),
             'charset' => 'utf8',
             'prefix' => '',
             'prefix_indexes' => true,
