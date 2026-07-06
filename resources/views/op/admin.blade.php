@@ -1534,7 +1534,7 @@
     let pollingTimer = null;
     let resumeTimer = null;
     let isUserInteracting = false;
-    const POLLING_INTERVAL_MS = 10000;
+    const POLLING_INTERVAL_MS = 15000;
 
     function startPolling() {
         stopPolling();

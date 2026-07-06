@@ -811,8 +811,8 @@
             selectOrder(parseInt(savedId));
         }
 
-        // Start polling updates every 10 seconds
-        setInterval(pollUpdates, 10000);
+        // Start polling updates every 15 seconds
+        setInterval(pollUpdates, 15000);
     });
 </script>
 @endsection

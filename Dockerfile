@@ -17,6 +17,8 @@ WORKDIR /app
 
 COPY . .
 
+RUN cp php.ini /usr/local/etc/php/conf.d/uploads.ini
+
 RUN composer install --no-dev --optimize-autoloader
 
 EXPOSE 10000
