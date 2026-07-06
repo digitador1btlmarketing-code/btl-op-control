@@ -3,8 +3,23 @@
 use Illuminate\Support\Str;
 use Pdo\Mysql;
 
-$dbUrl = env('DATABASE_URL');
-$url = $dbUrl ? parse_url($dbUrl) : [];
+$databaseUrl = getenv('DATABASE_URL') ?: env('DATABASE_URL');
+$url = $databaseUrl ? parse_url($databaseUrl) : [];
+
+if (env('APP_ENV') === 'production' && empty($databaseUrl)) {
+    $isBuildOrClear = false;
+    if (isset($_SERVER['argv'])) {
+        foreach ($_SERVER['argv'] as $arg) {
+            if (str_contains($arg, 'package:discover') || str_contains($arg, 'config:clear') || str_contains($arg, 'optimize:clear')) {
+                $isBuildOrClear = true;
+                break;
+            }
+        }
+    }
+    if (!$isBuildOrClear) {
+        throw new \Exception('DATABASE_URL no configurada en Render.');
+    }
+}
 
 return [
 
@@ -89,11 +104,12 @@ return [
 
         'pgsql' => [
             'driver' => 'pgsql',
-            'host' => $url['host'] ?? env('DB_HOST'),
-            'port' => $url['port'] ?? env('DB_PORT', 5432),
-            'database' => isset($url['path']) ? ltrim($url['path'], '/') : env('DB_DATABASE'),
-            'username' => $url['user'] ?? env('DB_USERNAME'),
-            'password' => $url['pass'] ?? env('DB_PASSWORD'),
+            'url' => $databaseUrl,
+            'host' => $url['host'] ?? null,
+            'port' => $url['port'] ?? 5432,
+            'database' => isset($url['path']) ? ltrim($url['path'], '/') : null,
+            'username' => $url['user'] ?? null,
+            'password' => $url['pass'] ?? null,
             'charset' => 'utf8',
             'prefix' => '',
             'prefix_indexes' => true,
