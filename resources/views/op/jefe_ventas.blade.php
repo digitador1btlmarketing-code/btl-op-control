@@ -171,7 +171,13 @@
                             </div>
                         </td>
                         <td>
-                            <span class="badge {{ $badgeCategoryClass }}">{{ $orden->categoria }}</span>
+                            @php
+                                $badgeCategoryClass = $orden->categoria === 'Branding' ? 'badge-normal' : 
+                                                      ($orden->categoria === 'Promocional' ? 'badge-proxima' : '');
+                            @endphp
+                            <span class="badge {{ $badgeCategoryClass }}" style="{{ $orden->categoria === 'Reprocesos' ? 'background: rgba(255, 95, 56, 0.15); color: #ff5f38; border: 1px solid rgba(255, 95, 56, 0.3);' : '' }}">
+                                {{ $orden->categoria === 'Reprocesos' ? 'REPROCESO' : $orden->categoria }}
+                            </span>
                         </td>
                         <td>{{ $orden->cliente }}</td>
                         <td>{{ $orden->marca }}</td>
@@ -373,6 +379,14 @@
         </div>
     </div>
 
+    <!-- Reproceso request block and history -->
+    <div id="reproceso-action-container" style="margin-top: 15px;"></div>
+
+    <div id="detail-reprocesos-section" style="margin-top: 15px; border-top: 1px solid var(--border-glass); padding-top: 15px;">
+        <h4 style="font-size: 1.05rem; color: var(--priority-proxima); margin-bottom: 10px; font-weight: 700;">🔄 Historial de Reprocesos</h4>
+        <div id="detail-reprocesos-content">-</div>
+    </div>
+
     <!-- Date change request section in details -->
     <div id="detail-date-change-section" style="margin-top: 15px; border-top: 1px solid var(--border-glass); padding-top: 15px;">
         <h4 style="font-size: 1.05rem; color: var(--blue-bright); margin-bottom: 10px; font-weight: 700;">Solicitud de Cambio de Fecha</h4>
@@ -474,6 +488,52 @@
             <div style="display: flex; gap: 12px; justify-content: flex-end;">
                 <button type="button" onclick="closeRejectRequestModal()" class="filter-btn" style="padding: 10px 20px; width: auto; font-weight: 600;">Cancelar</button>
                 <button type="submit" class="btn-primary" style="background: var(--priority-urgente); border-color: var(--priority-urgente); width: auto; padding: 10px 25px; font-weight: 700;">Rechazar Solicitud</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Solicitar Reproceso Modal -->
+<div id="request-reproceso-modal" class="custom-modal-overlay hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-modal-overlay); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 10000; transition: var(--transition);">
+    <div class="card" style="max-width: 520px; width: 90%; border-color: rgba(255, 95, 56, 0.4); box-shadow: var(--card-shadow); padding: 30px; margin-bottom: 0;">
+        <h3 style="font-size: 1.3rem; font-weight: 800; color: #ff5f38; margin-top: 0; margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
+            🔄 Solicitar Reproceso
+        </h3>
+        
+        <form id="request-reproceso-form" onsubmit="submitReprocesoRequest(event)" enctype="multipart/form-data">
+            @csrf
+            <input type="hidden" name="orden_id" id="reproceso-orden-id">
+            
+            <div class="form-group" style="text-align: left; margin-bottom: 15px;">
+                <label for="reproceso-motivo">Motivo *</label>
+                <select name="motivo" id="reproceso-motivo" required style="width: 100%;">
+                    <option value="" disabled selected>Seleccione un motivo</option>
+                    <option value="Error de diseño">Error de diseño</option>
+                    <option value="Error de producción">Error de producción</option>
+                    <option value="Daño en transporte">Daño en transporte</option>
+                    <option value="Solicitud del cliente">Solicitud del cliente</option>
+                    <option value="Otro">Otro</option>
+                </select>
+            </div>
+
+            <div class="form-group" style="text-align: left; margin-bottom: 15px;">
+                <label for="reproceso-descripcion">Descripción detallada *</label>
+                <textarea name="descripcion" id="reproceso-descripcion" class="form-control" rows="3" required placeholder="Describa el problema detalladamente..." style="resize: none;"></textarea>
+            </div>
+
+            <div class="form-group" style="text-align: left; margin-bottom: 15px;">
+                <label for="reproceso-fecha">Fecha requerida (Opcional)</label>
+                <input type="date" name="fecha_requerida" id="reproceso-fecha" class="form-control">
+            </div>
+
+            <div class="form-group" style="text-align: left; margin-bottom: 20px;">
+                <label for="reproceso-archivo">Archivo adjunto (Opcional)</label>
+                <input type="file" name="archivo" id="reproceso-archivo" class="form-control" style="padding: 6px;">
+            </div>
+            
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button type="button" onclick="closeRequestReprocesoModal()" class="filter-btn" style="padding: 10px 20px; width: auto; font-weight: 600;">Cancelar</button>
+                <button type="submit" class="btn-primary" style="background: #ff5f38; border-color: #ff5f38; width: auto; padding: 10px 25px; font-weight: 700;">Enviar Solicitud</button>
             </div>
         </form>
     </div>
@@ -804,11 +864,27 @@
         document.getElementById('detail-entregar-a').textContent = order.entregar_a;
         
         const briefDiv = document.getElementById('detail-brief');
-        if (order.brief) {
-            briefDiv.innerHTML = `<a href="/op/descargar-brief/${order.id}" target="_blank" class="btn-view-brief" style="background: rgba(0, 210, 255, 0.15); color: var(--blue-bright); border: 1px solid rgba(0, 210, 255, 0.3); padding: 4px 10px; border-radius: 6px; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 5px;">Ver Plano</a>`;
+        let filesHtml = '';
+        if (order.archivos && order.archivos.length > 0) {
+            order.archivos.forEach((file) => {
+                const fileName = file.file_name || 'Archivo';
+                filesHtml += `
+                    <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: var(--text-white); font-size: 0.9rem; word-break: break-all;">${fileName}</span>
+                        <a href="/op/descargar-archivo/${file.id}" target="_blank" class="btn-view-brief" style="background: rgba(0, 210, 255, 0.15); color: var(--blue-bright); border: 1px solid rgba(0, 210, 255, 0.3); padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; text-decoration: none; white-space: nowrap;">Descargar</a>
+                    </div>`;
+            });
+        } else if (order.brief) {
+            const fileName = order.brief.split('/').pop() || 'Plano';
+            filesHtml = `
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="color: var(--text-white); font-size: 0.9rem; word-break: break-all;">${fileName}</span>
+                    <a href="/op/descargar-brief/${order.id}" target="_blank" class="btn-view-brief" style="background: rgba(0, 210, 255, 0.15); color: var(--blue-bright); border: 1px solid rgba(0, 210, 255, 0.3); padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; text-decoration: none; white-space: nowrap;">Descargar</a>
+                </div>`;
         } else {
-            briefDiv.textContent = '-';
+            filesHtml = '-';
         }
+        briefDiv.innerHTML = filesHtml;
 
         const pdfBtn = document.getElementById('btn-download-pdf-op');
         if (pdfBtn) {
@@ -900,6 +976,90 @@
             statusDiv.innerHTML = '';
             if (btnChange) btnChange.style.display = 'inline-block';
         }
+
+        // Reprocesos request block and history
+        const actionContainer = document.getElementById('reproceso-action-container');
+        if (actionContainer) {
+            actionContainer.innerHTML = '';
+            if (order.estado === 'Terminado') {
+                const pendingReproceso = order.solicitudes_reproceso ? order.solicitudes_reproceso.find(s => s.estado === 'Pendiente') : null;
+                const hasActiveReproceso = order.reprocesos && order.reprocesos.some(r => r.estado !== 'Cancelado');
+                
+                if (pendingReproceso) {
+                    actionContainer.innerHTML = '<span class="badge badge-en-espera" style="padding: 6px 12px; font-size: 0.85rem; display: inline-block;">⏳ Solicitud de reproceso pendiente de aprobación</span>';
+                } else if (hasActiveReproceso) {
+                    const rep = order.reprocesos.find(r => r.estado !== 'Cancelado');
+                    actionContainer.innerHTML = `<span class="badge badge-proceso" style="padding: 6px 12px; font-size: 0.85rem; display: inline-block;">🔄 Ya existe un reproceso activo: <strong>${rep.numero_op}</strong></span>`;
+                } else {
+                    const userRole = '{{ session("user_role") }}';
+                    if (userRole === 'ventas' || userRole === 'jefe_ventas') {
+                        actionContainer.innerHTML = `<button onclick="openRequestReprocesoModal(${order.id})" class="btn-save-inline" style="background: rgba(255, 95, 56, 0.15); color: #ff5f38; border: 1px solid rgba(255, 95, 56, 0.3); padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.85rem;">🔄 Solicitar Reproceso</button>`;
+                    }
+                }
+            }
+        }
+
+        const reprocesosDiv = document.getElementById('detail-reprocesos-content');
+        if (reprocesosDiv) {
+            if (order.reprocesos && order.reprocesos.length > 0) {
+                let html = '<table style="width:100%; font-size:0.85rem; border-collapse:collapse; text-align:left;">';
+                html += '<thead><tr style="border-bottom:1px solid var(--border-glass);"><th style="padding:4px;">Código OP</th><th style="padding:4px;">Estado</th><th style="padding:4px;">Líder</th></tr></thead><tbody>';
+                order.reprocesos.forEach(rep => {
+                    let badgeClass = 'badge-pendiente';
+                    if (rep.estado === 'En proceso') badgeClass = 'badge-proceso';
+                    if (rep.estado === 'Terminado') badgeClass = 'badge-terminado';
+                    if (rep.estado === 'Cancelado') badgeClass = 'badge-cancelado';
+                    if (rep.estado === 'En espera') badgeClass = 'badge-en-espera';
+                    html += `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);"><td style="padding:6px 4px;"><strong>${rep.numero_op}</strong></td><td style="padding:6px 4px;"><span class="badge ${badgeClass}">${rep.estado}</span></td><td style="padding:6px 4px;">${rep.lider_produccion || '<em>Sin asignar</em>'}</td></tr>`;
+                });
+                html += '</tbody></table>';
+                reprocesosDiv.innerHTML = html;
+            } else {
+                reprocesosDiv.innerHTML = '<span style="color: var(--text-muted); font-style: italic;">Sin reprocesos</span>';
+            }
+        }
+    }
+
+    function openRequestReprocesoModal(id) {
+        document.getElementById('reproceso-orden-id').value = id;
+        document.getElementById('request-reproceso-form').reset();
+        document.getElementById('request-reproceso-modal').classList.remove('hidden');
+    }
+
+    function closeRequestReprocesoModal() {
+        document.getElementById('request-reproceso-modal').classList.add('hidden');
+    }
+
+    function submitReprocesoRequest(event) {
+        event.preventDefault();
+        const id = document.getElementById('reproceso-orden-id').value;
+        const form = document.getElementById('request-reproceso-form');
+        const formData = new FormData(form);
+
+        fetch(`/op/solicitar-reproceso/${id}`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
+        })
+        .then(res => res.json())
+        .then(data => {
+            closeRequestReprocesoModal();
+            if (data.success) {
+                showToast(data.message, 'success');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showToast(data.message, 'error');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            closeRequestReprocesoModal();
+            showToast('Error de red al enviar la solicitud.', 'error');
+        });
     }
 
     // Approve change date
@@ -1105,7 +1265,11 @@
                 }
 
                 const fireClass = (orden.estado === 'Terminado' || orden.estado === 'Cancelado') ? 'extinguished' : (!orden.mostrar_fuego ? 'hidden-fire' : '');
-                const badgeCategoryClass = orden.categoria === 'Branding' ? 'badge-normal' : 'badge-proxima';
+                const badgeCategoryClass = orden.categoria === 'Branding' ? 'badge-normal' : 
+                                          (orden.categoria === 'Promocional' ? 'badge-proxima' : '');
+                const styleCategory = orden.categoria === 'Reprocesos' ? 'background: rgba(255, 95, 56, 0.15); color: #ff5f38; border: 1px solid rgba(255, 95, 56, 0.3);' : '';
+                const catText = orden.categoria === 'Reprocesos' ? 'REPROCESO' : orden.categoria;
+                
                 const progressFillClass = orden.estado === 'Pendiente' ? 'progress-fill-pendiente' :
                                           (orden.estado === 'En proceso' ? 'progress-fill-proceso' :
                                           (orden.estado === 'Cancelado' ? 'progress-fill-cancelado' :
@@ -1127,7 +1291,7 @@
                         </div>
                     </td>
                     <td>
-                        <span class="badge ${badgeCategoryClass}">${orden.categoria}</span>
+                        <span class="badge ${badgeCategoryClass}" style="${styleCategory}">${catText}</span>
                     </td>
                     <td>${orden.cliente}</td>
                     <td>${orden.marca}</td>
@@ -1196,8 +1360,8 @@
         applyJefeFilters();
         updateSoundButtonUI();
         
-        // Start polling updates every 5 seconds
-        setInterval(pollJefeUpdates, 5000);
+        // Start polling updates every 15 seconds
+        setInterval(pollJefeUpdates, 15000);
     });
     function exportData(type) {
         const searchVal = document.getElementById('search-op')?.value || '';

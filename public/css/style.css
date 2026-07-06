@@ -1344,31 +1344,87 @@ input[type="date"], input[type="time"] {
 
 /* Widescreen optimization and header compacting */
 .tv-body .tv-header {
-    padding: 8px 16px;
-    margin-bottom: 8px;
+    padding: 4px 12px;
+    margin-bottom: 4px;
 }
 
 .tv-body .tv-title {
-    font-size: 1.6rem;
+    font-size: 1.25rem;
+}
+
+.tv-body .tv-meta {
+    font-size: 0.75rem;
+    margin-top: 2px;
 }
 
 .tv-body .tv-kpis {
-    margin-bottom: 8px;
+    margin-bottom: 4px;
+    gap: 8px;
+}
+
+.tv-body .tv-kpi-card {
+    padding: 6px 12px;
+    height: 38px;
+}
+
+.tv-body .tv-kpi-card .kpi-value {
+    font-size: 1.35rem !important;
+}
+
+.tv-body .tv-kpi-card .kpi-label {
+    font-size: 0.75rem !important;
+}
+
+.tv-body .filter-bar {
+    margin-bottom: 4px;
+    gap: 6px;
+}
+
+.tv-body .filter-btn {
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    border-radius: 6px;
+}
+
+.tv-body .card {
+    padding: 8px !important;
+    margin-bottom: 6px !important;
+    border-radius: 8px !important;
 }
 
 .tv-body .tv-table th {
-    font-size: 1rem;
-    padding: 10px 8px;
+    font-size: 0.85rem;
+    padding: 6px 6px;
 }
 
 .tv-body .tv-table td {
-    font-size: 1.25rem; /* Highly legible but compact enough to show multiple rows without scrolling */
-    padding: 12px 8px;
+    font-size: 1.05rem; /* Highly legible but compact enough to show multiple rows without scrolling */
+    padding: 6px 6px;
 }
 
 .tv-body .tv-table .badge {
-    font-size: 0.95rem;
-    padding: 4px 8px;
+    font-size: 0.8rem;
+    padding: 2px 6px;
+}
+
+.tv-body .tv-table .progress-track {
+    height: 12px;
+    border-radius: 6px;
+}
+
+.tv-body .tv-table .progress-text {
+    font-size: 0.85rem;
+    min-width: 35px;
+}
+
+.tv-body .tv-bottom-layout {
+    margin-top: 4px;
+    gap: 8px;
+}
+
+.tv-body .section-title {
+    font-size: 1.15rem;
+    margin-bottom: 6px;
 }
 
 /* Toast Notifications Container styling */

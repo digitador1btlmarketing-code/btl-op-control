@@ -6,6 +6,8 @@ use App\Models\OrdenProduccion;
 use App\Models\UsuarioAcceso;
 use App\Models\SolicitudCambioFecha;
 use App\Models\HistorialOrden;
+use App\Models\OrdenProduccionArchivo;
+use App\Models\SolicitudReproceso;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
@@ -29,7 +31,7 @@ class OrdenProduccionController extends Controller
     public function store(Request $request)
     {
         $rules = [
-            'categoria' => 'required|in:Branding,Promocional',
+            'categoria' => 'required|in:Branding,Promocional,Reprocesos,Reproceso,REPROCESO',
             'numero_op' => 'required|string|max:100',
             'proyecto' => 'required|string|max:255',
             'presupuestista' => 'required|string|max:255',
@@ -38,7 +40,8 @@ class OrdenProduccionController extends Controller
             'fecha_entrega' => 'required|date',
             'hora_entrega' => 'required',
             'entregar_a' => 'required|in:Cliente,Bodega,Instaladores',
-            'brief' => 'nullable|file|mimes:pdf,ppt,pptx,zip,jpg,jpeg,png,ai,psd,xls,xlsx,csv|max:102400',
+            'brief' => 'nullable|array',
+            'brief.*' => 'file|max:102400',
         ];
 
         // Conditional validation based on entregar_a
@@ -65,9 +68,25 @@ class OrdenProduccionController extends Controller
             'hora_instalacion.required' => 'La hora de instalación es obligatoria.',
             'fecha_desinstalacion.required' => 'La fecha de desinstalación es obligatoria.',
             'hora_desinstalacion.required' => 'La hora de desinstalación es obligatoria.',
-            'brief.max' => 'El archivo brief no debe pesar más de 100MB.',
-            'brief.mimes' => 'El archivo debe ser de un formato permitido (PDF, PPT, PPTX, ZIP, JPG, PNG, AI, PSD, XLS, XLSX, CSV).',
+            'brief.*.max' => 'El archivo no debe pesar más de 100MB.',
         ]);
+
+        // Manual extension validation to avoid mime type detection errors
+        if ($request->hasFile('brief')) {
+            $files = $request->file('brief');
+            $allowedExtensions = ['pdf', 'ppt', 'pptx', 'zip', 'jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'ai', 'psd', 'xls', 'xlsx', 'csv', 'doc', 'docx'];
+            
+            foreach ($files as $file) {
+                if ($file) {
+                    $ext = strtolower($file->getClientOriginalExtension());
+                    if (!in_array($ext, $allowedExtensions)) {
+                        return redirect()->back()
+                            ->withInput()
+                            ->withErrors(['brief' => 'El archivo no es válido. Formatos permitidos: PDF, Excel, Word, PowerPoint, ZIP, imágenes, AI, PSD y CSV.']);
+                    }
+                }
+            }
+        }
 
         // Clean up installation fields if not Instaladores
         if ($request->input('entregar_a') !== 'Instaladores') {
@@ -78,11 +97,9 @@ class OrdenProduccionController extends Controller
             $validated['hora_desinstalacion'] = null;
         }
 
-        // Handle file upload
-        if ($request->hasFile('brief')) {
-            $path = $request->file('brief')->store('briefs', 'public');
-            $validated['brief'] = $path;
-        }
+        // We will save files after creating the order, so exclude brief from validated array for creation
+        $briefFiles = $request->file('brief');
+        unset($validated['brief']);
 
         // Add creator tracking
         $validated['creado_por_codigo'] = session('user_code');
@@ -91,6 +108,36 @@ class OrdenProduccionController extends Controller
 
         // Create the order. 'avance' and 'estado' are set via defaults & events.
         $orden = OrdenProduccion::create($validated);
+
+        // Handle multiple file uploads
+        if ($briefFiles) {
+            $firstPath = null;
+            if (is_array($briefFiles)) {
+                foreach ($briefFiles as $index => $file) {
+                    $originalName = $file->getClientOriginalName();
+                    $path = $file->store('briefs', 'public');
+                    if ($index === 0) {
+                        $firstPath = $path;
+                    }
+                    $orden->archivos()->create([
+                        'file_path' => $path,
+                        'file_name' => $originalName,
+                    ]);
+                }
+            } else {
+                $file = $briefFiles;
+                $originalName = $file->getClientOriginalName();
+                $path = $file->store('briefs', 'public');
+                $firstPath = $path;
+                $orden->archivos()->create([
+                    'file_path' => $path,
+                    'file_name' => $originalName,
+                ]);
+            }
+            if ($firstPath) {
+                $orden->update(['brief' => $firstPath]);
+            }
+        }
 
         // Log to history
         $orden->historial()->create([
@@ -101,6 +148,8 @@ class OrdenProduccionController extends Controller
             'realizado_por_rol' => session('user_role'),
         ]);
 
+        $this->clearDashboardCache();
+
         return redirect('/op/nueva')->with('success', 'Orden de Producción creada correctamente.');
     }
 
@@ -110,12 +159,28 @@ class OrdenProduccionController extends Controller
     public function admin()
     {
         $userRole = session('user_role');
-        $query = OrdenProduccion::with('solicitudPendiente');
+        $query = OrdenProduccion::with(['solicitudPendiente', 'archivos', 'reprocesos', 'solicitudesReproceso']);
 
         if ($userRole === 'admin_branding') {
-            $query->where('categoria', 'Branding');
+            $query->where(function ($q) {
+                $q->where('categoria', 'Branding')
+                  ->orWhere(function ($sub) {
+                      $sub->whereIn('categoria', ['Reprocesos', 'REPROCESO', 'reproceso'])
+                          ->whereHas('original', function ($orig) {
+                              $orig->where('categoria', 'Branding');
+                          });
+                  });
+            });
         } elseif ($userRole === 'admin_promo') {
-            $query->where('categoria', 'Promocional');
+            $query->where(function ($q) {
+                $q->where('categoria', 'Promocional')
+                  ->orWhere(function ($sub) {
+                      $sub->whereIn('categoria', ['Reprocesos', 'REPROCESO', 'reproceso'])
+                          ->whereHas('original', function ($orig) {
+                              $orig->where('categoria', 'Promocional');
+                          });
+                  });
+            });
         }
 
         $ordenes = $query->orderBy('fecha_entrega', 'asc')
@@ -128,15 +193,32 @@ class OrdenProduccionController extends Controller
             ->filter(fn($sol) => $this->canApproveOrRejectSolicitud($sol))
             ->values();
 
-        $kpis = [
-            'total' => $ordenes->count(),
-            'pendientes' => $ordenes->where('estado', 'Pendiente')->count(),
-            'en_proceso' => $ordenes->where('estado', 'En proceso')->count(),
-            'terminadas' => $ordenes->where('estado', 'Terminado')->count(),
-            'en_espera' => $ordenes->where('estado', 'En espera')->count(),
-            'urgentes' => $ordenes->filter(fn($o) => $o->prioridad === 'URGENTE')->count(),
-            'solicitudes_pendientes' => $solicitudes->count(),
-        ];
+        $solicitudesReprocesoQuery = SolicitudReproceso::with('ordenProduccion')
+            ->where('estado', 'Pendiente');
+
+        if ($userRole === 'admin_branding') {
+            $solicitudesReprocesoQuery->whereHas('ordenProduccion', function ($q) {
+                $q->where('categoria', 'Branding');
+            });
+        } elseif ($userRole === 'admin_promo') {
+            $solicitudesReprocesoQuery->whereHas('ordenProduccion', function ($q) {
+                $q->where('categoria', 'Promocional');
+            });
+        }
+
+        $solicitudesReproceso = $solicitudesReprocesoQuery->get();
+
+        $kpis = \Illuminate\Support\Facades\Cache::remember("dashboard_stats_{$userRole}", 60, function () use ($ordenes, $solicitudes, $solicitudesReproceso) {
+            return [
+                'total' => $ordenes->count(),
+                'pendientes' => $ordenes->where('estado', 'Pendiente')->count(),
+                'en_proceso' => $ordenes->where('estado', 'En proceso')->count(),
+                'terminadas' => $ordenes->where('estado', 'Terminado')->count(),
+                'en_espera' => $ordenes->where('estado', 'En espera')->count(),
+                'urgentes' => $ordenes->filter(fn($o) => $o->prioridad === 'URGENTE')->count(),
+                'solicitudes_pendientes' => $solicitudes->count() + $solicitudesReproceso->count(),
+            ];
+        });
 
         // Fetch all users for Master Admin user management panel
         $usuarios = [];
@@ -150,7 +232,7 @@ class OrdenProduccionController extends Controller
                 });
         }
 
-        return view('op.admin', compact('ordenes', 'kpis', 'usuarios', 'solicitudes'));
+        return view('op.admin', compact('ordenes', 'kpis', 'usuarios', 'solicitudes', 'solicitudesReproceso'));
     }
 
     /**
@@ -206,6 +288,8 @@ class OrdenProduccionController extends Controller
             ]);
         }
 
+        $this->clearDashboardCache();
+
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json([
                 'success' => true,
@@ -229,7 +313,17 @@ class OrdenProduccionController extends Controller
         // Enforced by middleware, but fallback is Branding
         $categoria = $request->query('categoria', 'Branding');
 
-        $ordenesRaw = OrdenProduccion::where('categoria', $categoria)->get();
+        $ordenesRaw = OrdenProduccion::with('archivos')
+            ->where(function($q) use ($categoria) {
+                $q->where('categoria', $categoria)
+                  ->orWhere(function($sub) use ($categoria) {
+                      $sub->whereIn('categoria', ['Reprocesos', 'Reproceso', 'REPROCESO'])
+                          ->whereHas('original', function($orig) use ($categoria) {
+                              $orig->where('categoria', $categoria);
+                          });
+                  });
+            })
+            ->get();
 
         // Sort: Urgent first, then Próxima, then Normal
         // We can sort by dias_restantes ascending
@@ -253,7 +347,17 @@ class OrdenProduccionController extends Controller
     public function tvUpdates(Request $request)
     {
         $categoria = $request->query('categoria', 'Branding');
-        $ordenesRaw = OrdenProduccion::where('categoria', $categoria)->get();
+        $ordenesRaw = OrdenProduccion::with('archivos')
+            ->where(function($q) use ($categoria) {
+                $q->where('categoria', $categoria)
+                  ->orWhere(function($sub) use ($categoria) {
+                      $sub->whereIn('categoria', ['Reprocesos', 'Reproceso', 'REPROCESO'])
+                          ->whereHas('original', function($orig) use ($categoria) {
+                              $orig->where('categoria', $categoria);
+                          });
+                  });
+            })
+            ->get();
 
         $ordenes = $ordenesRaw->sortBy(function ($orden) {
             return $orden->dias_restantes;
@@ -283,12 +387,28 @@ class OrdenProduccionController extends Controller
     public function adminUpdates()
     {
         $userRole = session('user_role');
-        $query = OrdenProduccion::with('solicitudPendiente');
+        $query = OrdenProduccion::with(['solicitudPendiente', 'archivos', 'reprocesos', 'solicitudesReproceso']);
 
         if ($userRole === 'admin_branding') {
-            $query->where('categoria', 'Branding');
+            $query->where(function ($q) {
+                $q->where('categoria', 'Branding')
+                  ->orWhere(function ($sub) {
+                      $sub->whereIn('categoria', ['Reprocesos', 'REPROCESO', 'reproceso'])
+                          ->whereHas('original', function ($orig) {
+                              $orig->where('categoria', 'Branding');
+                          });
+                  });
+            });
         } elseif ($userRole === 'admin_promo') {
-            $query->where('categoria', 'Promocional');
+            $query->where(function ($q) {
+                $q->where('categoria', 'Promocional')
+                  ->orWhere(function ($sub) {
+                      $sub->whereIn('categoria', ['Reprocesos', 'REPROCESO', 'reproceso'])
+                          ->whereHas('original', function ($orig) {
+                              $orig->where('categoria', 'Promocional');
+                          });
+                  });
+            });
         }
 
         $ordenes = $query->orderBy('fecha_entrega', 'asc')
@@ -306,15 +426,32 @@ class OrdenProduccionController extends Controller
             ->filter(fn($sol) => $this->canApproveOrRejectSolicitud($sol))
             ->values();
 
-        $kpis = [
-            'total' => $ordenes->count(),
-            'pendientes' => $ordenes->where('estado', 'Pendiente')->count(),
-            'en_proceso' => $ordenes->where('estado', 'En proceso')->count(),
-            'terminadas' => $ordenes->where('estado', 'Terminado')->count(),
-            'en_espera' => $ordenes->where('estado', 'En espera')->count(),
-            'urgentes' => $ordenes->filter(fn($o) => $o->prioridad === 'URGENTE')->count(),
-            'solicitudes_pendientes' => $solicitudes->count(),
-        ];
+        $solicitudesReprocesoQuery = SolicitudReproceso::with('ordenProduccion')
+            ->where('estado', 'Pendiente');
+
+        if ($userRole === 'admin_branding') {
+            $solicitudesReprocesoQuery->whereHas('ordenProduccion', function ($q) {
+                $q->where('categoria', 'Branding');
+            });
+        } elseif ($userRole === 'admin_promo') {
+            $solicitudesReprocesoQuery->whereHas('ordenProduccion', function ($q) {
+                $q->where('categoria', 'Promocional');
+            });
+        }
+
+        $solicitudesReproceso = $solicitudesReprocesoQuery->get();
+
+        $kpis = \Illuminate\Support\Facades\Cache::remember("dashboard_stats_{$userRole}", 60, function () use ($ordenes, $solicitudes, $solicitudesReproceso) {
+            return [
+                'total' => $ordenes->count(),
+                'pendientes' => $ordenes->where('estado', 'Pendiente')->count(),
+                'en_proceso' => $ordenes->where('estado', 'En proceso')->count(),
+                'terminadas' => $ordenes->where('estado', 'Terminado')->count(),
+                'en_espera' => $ordenes->where('estado', 'En espera')->count(),
+                'urgentes' => $ordenes->filter(fn($o) => $o->prioridad === 'URGENTE')->count(),
+                'solicitudes_pendientes' => $solicitudes->count() + $solicitudesReproceso->count(),
+            ];
+        });
 
         // Fetch requests resolved in the last 5 minutes (filtered by admin category)
         $recentResolutionsQuery = SolicitudCambioFecha::with('ordenProduccion')
@@ -347,6 +484,7 @@ class OrdenProduccionController extends Controller
         return response()->json([
             'ordenes' => $ordenes,
             'solicitudes' => $solicitudes,
+            'solicitudes_reproceso' => $solicitudesReproceso,
             'kpis' => $kpis,
             'recent_resolutions' => $recentResolutions,
             'recent_events' => $this->getRecentEvents()
@@ -388,7 +526,16 @@ class OrdenProduccionController extends Controller
     public function misOrdenes()
     {
         $vendedorCodigo = session('user_code');
-        $ordenes = OrdenProduccion::where('creado_por_codigo', $vendedorCodigo)
+        $ordenes = OrdenProduccion::with(['archivos', 'reprocesos', 'solicitudesReproceso'])
+            ->where(function($q) use ($vendedorCodigo) {
+                $q->where('creado_por_codigo', $vendedorCodigo)
+                  ->orWhere(function($sub) use ($vendedorCodigo) {
+                      $sub->where('categoria', 'Reprocesos')
+                          ->whereHas('original', function($o) use ($vendedorCodigo) {
+                              $o->where('creado_por_codigo', $vendedorCodigo);
+                          });
+                  });
+            })
             ->orderBy('fecha_entrega', 'asc')
             ->orderBy('hora_entrega', 'asc')
             ->get();
@@ -410,7 +557,16 @@ class OrdenProduccionController extends Controller
     public function misOrdenesUpdates()
     {
         $vendedorCodigo = session('user_code');
-        $ordenes = OrdenProduccion::where('creado_por_codigo', $vendedorCodigo)
+        $ordenes = OrdenProduccion::with(['archivos', 'reprocesos', 'solicitudesReproceso'])
+            ->where(function($q) use ($vendedorCodigo) {
+                $q->where('creado_por_codigo', $vendedorCodigo)
+                  ->orWhere(function($sub) use ($vendedorCodigo) {
+                      $sub->where('categoria', 'Reprocesos')
+                          ->whereHas('original', function($o) use ($vendedorCodigo) {
+                              $o->where('creado_por_codigo', $vendedorCodigo);
+                          });
+                  });
+            })
             ->orderBy('fecha_entrega', 'asc')
             ->orderBy('hora_entrega', 'asc')
             ->get();
@@ -441,13 +597,28 @@ class OrdenProduccionController extends Controller
         $jefeCodigo = session('user_code');
 
         // Filter OPs: created by vendors belonging to this jefe or by the jefe itself
-        $ordenes = OrdenProduccion::where(function ($query) use ($jefeCodigo) {
-            $query->whereIn('creado_por_codigo', function ($sub) use ($jefeCodigo) {
-                $sub->select('codigo')
-                    ->from('usuarios_acceso')
-                    ->where('jefe_codigo', $jefeCodigo);
+        $ordenes = OrdenProduccion::with(['archivos', 'reprocesos', 'solicitudesReproceso'])->where(function ($query) use ($jefeCodigo) {
+            $query->where(function ($q) use ($jefeCodigo) {
+                $q->whereIn('creado_por_codigo', function ($sub) use ($jefeCodigo) {
+                    $sub->select('codigo')
+                        ->from('usuarios_acceso')
+                        ->where('jefe_codigo', $jefeCodigo);
+                })
+                ->orWhere('creado_por_codigo', $jefeCodigo);
             })
-            ->orWhere('creado_por_codigo', $jefeCodigo);
+            ->orWhere(function ($sub) use ($jefeCodigo) {
+                $sub->where('categoria', 'Reprocesos')
+                    ->whereHas('original', function ($orig) use ($jefeCodigo) {
+                        $orig->where(function ($q) use ($jefeCodigo) {
+                            $q->whereIn('creado_por_codigo', function ($sub2) use ($jefeCodigo) {
+                                $sub2->select('codigo')
+                                    ->from('usuarios_acceso')
+                                    ->where('jefe_codigo', $jefeCodigo);
+                            })
+                            ->orWhere('creado_por_codigo', $jefeCodigo);
+                        });
+                    });
+            });
         })
         ->orderBy('fecha_entrega', 'asc')
         ->orderBy('hora_entrega', 'asc')
@@ -490,13 +661,28 @@ class OrdenProduccionController extends Controller
     {
         $jefeCodigo = session('user_code');
 
-        $ordenes = OrdenProduccion::where(function ($query) use ($jefeCodigo) {
-            $query->whereIn('creado_por_codigo', function ($sub) use ($jefeCodigo) {
-                $sub->select('codigo')
-                    ->from('usuarios_acceso')
-                    ->where('jefe_codigo', $jefeCodigo);
+        $ordenes = OrdenProduccion::with(['archivos', 'reprocesos', 'solicitudesReproceso'])->where(function ($query) use ($jefeCodigo) {
+            $query->where(function ($q) use ($jefeCodigo) {
+                $q->whereIn('creado_por_codigo', function ($sub) use ($jefeCodigo) {
+                    $sub->select('codigo')
+                        ->from('usuarios_acceso')
+                        ->where('jefe_codigo', $jefeCodigo);
+                })
+                ->orWhere('creado_por_codigo', $jefeCodigo);
             })
-            ->orWhere('creado_por_codigo', $jefeCodigo);
+            ->orWhere(function ($sub) use ($jefeCodigo) {
+                $sub->where('categoria', 'Reprocesos')
+                    ->whereHas('original', function ($orig) use ($jefeCodigo) {
+                        $orig->where(function ($q) use ($jefeCodigo) {
+                            $q->whereIn('creado_por_codigo', function ($sub2) use ($jefeCodigo) {
+                                $sub2->select('codigo')
+                                    ->from('usuarios_acceso')
+                                    ->where('jefe_codigo', $jefeCodigo);
+                            })
+                            ->orWhere('creado_por_codigo', $jefeCodigo);
+                        });
+                    });
+            });
         })
         ->orderBy('fecha_entrega', 'asc')
         ->orderBy('hora_entrega', 'asc')
@@ -569,7 +755,7 @@ class OrdenProduccionController extends Controller
         $rules = [
             'nombre' => 'required|string|max:100',
             'apellido' => 'required|string|max:100',
-            'rol' => 'required|in:ventas,jefe_ventas,admin_branding,admin_promo',
+            'rol' => 'required|in:ventas,jefe_ventas,admin_branding,admin_promo,vista',
         ];
         
         if ($userRole === 'jefe_ventas') {
@@ -594,6 +780,10 @@ class OrdenProduccionController extends Controller
         } elseif ($rol === 'jefe_ventas') {
             $cleanedApellido = $this->cleanString($apellido);
             $codigo = 'JEFE' . $cleanedApellido . '-PROD-2026';
+        } elseif ($rol === 'vista') {
+            $cleanedNombre = $this->cleanString($nombre);
+            $cleanedApellido = $this->cleanString($apellido);
+            $codigo = 'VISTA-' . $cleanedNombre . '-' . $cleanedApellido . '-PROD-2026';
         } else { // ventas
             $cleanedNombre = $this->cleanString($nombre);
             $cleanedApellido = $this->cleanString($apellido);
@@ -637,7 +827,7 @@ class OrdenProduccionController extends Controller
         ];
         
         if ($userRole === 'admin') {
-            $rules['rol'] = 'required|in:ventas,jefe_ventas,admin_branding,admin_promo';
+            $rules['rol'] = 'required|in:ventas,jefe_ventas,admin_branding,admin_promo,vista';
             if ($request->input('rol') === 'ventas') {
                 $rules['jefe_codigo'] = 'required|in:JEFERIZO-PROD-2026,JEFECAJINA-PROD-2026';
             }
@@ -678,6 +868,10 @@ class OrdenProduccionController extends Controller
             } elseif ($rol === 'jefe_ventas') {
                 $cleanedApellido = $this->cleanString($apellido);
                 $nuevoCodigo = 'JEFE' . $cleanedApellido . '-PROD-2026';
+            } elseif ($rol === 'vista') {
+                $cleanedNombre = $this->cleanString($nombre);
+                $cleanedApellido = $this->cleanString($apellido);
+                $nuevoCodigo = 'VISTA-' . $cleanedNombre . '-' . $cleanedApellido . '-PROD-2026';
             } else { // ventas
                 $cleanedNombre = $this->cleanString($nombre);
                 $cleanedApellido = $this->cleanString($apellido);
@@ -830,6 +1024,8 @@ class OrdenProduccionController extends Controller
             'realizado_por_rol' => session('user_role'),
         ]);
 
+        $this->clearDashboardCache();
+
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json(['success' => true, 'message' => 'Solicitud aprobada correctamente y fecha de entrega actualizada.']);
         }
@@ -875,6 +1071,8 @@ class OrdenProduccionController extends Controller
             'realizado_por_nombre' => session('user_name'),
             'realizado_por_rol' => session('user_role'),
         ]);
+
+        $this->clearDashboardCache();
 
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json(['success' => true, 'message' => 'Solicitud rechazada correctamente.']);
@@ -963,6 +1161,8 @@ class OrdenProduccionController extends Controller
             if ($orden->creado_por_codigo === $userCode) {
                 $authorized = true;
             }
+        } elseif ($userRole === 'vista') {
+            $authorized = true;
         }
 
         if (!$authorized) {
@@ -1395,5 +1595,368 @@ class OrdenProduccionController extends Controller
                     'created_at' => $event->created_at->toIso8601String(),
                 ];
             });
+    }
+
+    /**
+     * Display the Vista panel (solo lectura).
+     */
+    public function vistaPanel()
+    {
+        $ordenes = OrdenProduccion::with(['archivos', 'reprocesos', 'solicitudesReproceso'])
+            ->orderBy('fecha_entrega', 'asc')
+            ->orderBy('hora_entrega', 'asc')
+            ->get();
+
+        $kpis = [
+            'total' => $ordenes->count(),
+            'pendientes' => $ordenes->where('estado', 'Pendiente')->count(),
+            'en_proceso' => $ordenes->where('estado', 'En proceso')->count(),
+            'en_espera' => $ordenes->where('estado', 'En espera')->count(),
+            'terminadas' => $ordenes->where('estado', 'Terminado')->count(),
+            'urgentes' => $ordenes->filter(fn($o) => $o->prioridad === 'URGENTE')->count(),
+        ];
+
+        return view('op.vista', compact('ordenes', 'kpis'));
+    }
+
+    /**
+     * Get updates for the Vista panel.
+     */
+    public function vistaUpdates()
+    {
+        $ordenes = OrdenProduccion::with(['archivos', 'reprocesos', 'solicitudesReproceso'])
+            ->orderBy('fecha_entrega', 'asc')
+            ->orderBy('hora_entrega', 'asc')
+            ->get();
+
+        $ordenes->each(function ($o) {
+            $o->append(['dias_restantes', 'prioridad', 'mostrar_fuego']);
+        });
+
+        $kpis = [
+            'total' => $ordenes->count(),
+            'pendientes' => $ordenes->where('estado', 'Pendiente')->count(),
+            'en_proceso' => $ordenes->where('estado', 'En proceso')->count(),
+            'en_espera' => $ordenes->where('estado', 'En espera')->count(),
+            'terminadas' => $ordenes->where('estado', 'Terminado')->count(),
+            'urgentes' => $ordenes->filter(fn($o) => $o->prioridad === 'URGENTE')->count(),
+        ];
+
+        return response()->json([
+            'ordenes' => $ordenes,
+            'kpis' => $kpis
+        ]);
+    }
+
+    /**
+     * Download a specific file by its ID from the files table.
+     */
+    public function descargarArchivo($id)
+    {
+        $archivo = OrdenProduccionArchivo::findOrFail($id);
+        $filePath = $archivo->file_path;
+        
+        if (!Storage::disk('public')->exists($filePath)) {
+            abort(404, 'El archivo no existe físicamente en el servidor.');
+        }
+        
+        $absolutePath = Storage::disk('public')->path($filePath);
+        $extension = strtolower(pathinfo($absolutePath, PATHINFO_EXTENSION));
+        $mimeType = mime_content_type($absolutePath);
+        
+        $inlineExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'];
+        
+        if (in_array($extension, $inlineExtensions)) {
+            return response()->file($absolutePath, [
+                'Content-Type' => $mimeType,
+                'Content-Disposition' => 'inline; filename="' . $archivo->file_name . '"'
+            ]);
+        } else {
+            return response()->download($absolutePath, $archivo->file_name);
+        }
+    }
+
+    /**
+     * Submit a reproceso request for a finished order.
+     */
+    public function solicitarReproceso(Request $request, $id)
+    {
+        $orden = OrdenProduccion::findOrFail($id);
+        
+        if ($orden->estado !== 'Terminado') {
+            return response()->json(['success' => false, 'message' => 'Solo se puede solicitar reproceso para órdenes terminadas.'], 400);
+        }
+
+        // Check if there is already a pending request or an approved reproceso
+        $existsPending = SolicitudReproceso::where('orden_produccion_id', $id)
+            ->where('estado', 'Pendiente')
+            ->exists();
+        if ($existsPending) {
+            return response()->json(['success' => false, 'message' => 'Ya existe una solicitud de reproceso pendiente para esta orden.'], 400);
+        }
+
+        $existsApproved = OrdenProduccion::where('reproceso_de_id', $id)->exists();
+        if ($existsApproved) {
+            return response()->json(['success' => false, 'message' => 'Esta orden ya cuenta con un reproceso activo.'], 400);
+        }
+
+        $request->validate([
+            'motivo' => 'required|string|in:Error de diseño,Error de producción,Daño en transporte,Solicitud del cliente,Otro',
+            'descripcion' => 'required|string|max:2000',
+            'fecha_requerida' => 'nullable|date',
+            'archivo' => 'nullable|file|max:102400',
+        ]);
+
+        $filePath = null;
+        if ($request->hasFile('archivo')) {
+            $filePath = $request->file('archivo')->store('reprocesos_adjuntos', 'public');
+        }
+
+        SolicitudReproceso::create([
+            'orden_produccion_id' => $id,
+            'motivo' => $request->motivo,
+            'descripcion' => $request->descripcion,
+            'fecha_requerida' => $request->fecha_requerida,
+            'archivo_adjunto' => $filePath,
+            'estado' => 'Pendiente',
+            'solicitado_por_codigo' => session('user_code'),
+            'solicitado_por_nombre' => session('user_name'),
+        ]);
+
+        // Log to history
+        $orden->historial()->create([
+            'tipo_evento' => 'solicitud_reproceso',
+            'descripcion' => 'Solicitud de reproceso creada por ' . session('user_name') . ' (' . session('user_code') . '). Motivo: ' . $request->motivo . '. Descripción: ' . $request->descripcion,
+            'realizado_por_codigo' => session('user_code'),
+            'realizado_por_nombre' => session('user_name'),
+            'realizado_por_rol' => session('user_role'),
+        ]);
+
+        $this->clearDashboardCache();
+
+        return response()->json(['success' => true, 'message' => 'Solicitud de reproceso enviada correctamente.']);
+    }
+
+    /**
+     * Approve a reproceso request and create the new reproceso OP.
+     */
+    public function aprobarReproceso(Request $request, $id)
+    {
+        $solicitud = SolicitudReproceso::findOrFail($id);
+        
+        if ($solicitud->estado !== 'Pendiente') {
+            return response()->json(['success' => false, 'message' => 'Esta solicitud ya fue procesada.'], 400);
+        }
+
+        $request->validate([
+            'numero_op' => 'required|string|max:100|unique:orden_produccions,numero_op',
+            'lider_produccion' => 'nullable|string|max:255',
+            'estado' => 'required|in:Pendiente,En proceso,En espera',
+        ]);
+
+        $original = $solicitud->ordenProduccion;
+
+        // Check if there is already an active reproceso
+        $existsApproved = OrdenProduccion::where('reproceso_de_id', $original->id)->exists();
+        if ($existsApproved) {
+            $solicitud->update(['estado' => 'Rechazado']);
+            return response()->json(['success' => false, 'message' => 'Esta orden ya cuenta con un reproceso activo.'], 400);
+        }
+
+        // Create the new reproceso OP
+        $reproceso = OrdenProduccion::create([
+            'categoria' => 'Reprocesos',
+            'numero_op' => $request->numero_op,
+            'proyecto' => $original->proyecto . ' (Reproceso)',
+            'presupuestista' => $original->presupuestista,
+            'cliente' => $original->cliente,
+            'marca' => $original->marca,
+            'fecha_entrega' => now()->addDays(2)->format('Y-m-d'), // Default: 2 days from now
+            'hora_entrega' => '18:00:00',
+            'entregar_a' => $original->entregar_a,
+            'lugar_instalacion' => $original->lugar_instalacion,
+            'fecha_instalacion' => $original->fecha_instalacion,
+            'hora_instalacion' => $original->hora_instalacion,
+            'fecha_desinstalacion' => $original->fecha_desinstalacion,
+            'hora_desinstalacion' => $original->hora_desinstalacion,
+            'brief' => $original->brief,
+            'lider_produccion' => $request->lider_produccion,
+            'estado' => $request->estado,
+            'avance' => 0,
+            'creado_por_codigo' => session('user_code'),
+            'creado_por_nombre' => session('user_name'),
+            'creado_por_rol' => session('user_role'),
+            'reproceso_de_id' => $original->id,
+            'parent_op_id' => $original->id,
+        ]);
+
+        $this->clearDashboardCache();
+
+        // Copy files/archivos associated with original OP to the new one
+        if ($original->archivos()->exists()) {
+            foreach ($original->archivos as $archivo) {
+                $reproceso->archivos()->create([
+                    'file_path' => $archivo->file_path,
+                    'file_name' => $archivo->file_name,
+                ]);
+            }
+        }
+
+        $solicitud->update([
+            'estado' => 'Aprobado',
+            'reproceso_id' => $reproceso->id,
+        ]);
+
+        // Log to original OP history
+        $original->historial()->create([
+            'tipo_evento' => 'aprobacion_reproceso',
+            'descripcion' => 'Solicitud de reproceso APROBADA por ' . session('user_name') . '. Se creó la OP: ' . $reproceso->numero_op,
+            'realizado_por_codigo' => session('user_code'),
+            'realizado_por_nombre' => session('user_name'),
+            'realizado_por_rol' => session('user_role'),
+        ]);
+
+        // Log to new OP history
+        $reproceso->historial()->create([
+            'tipo_evento' => 'creacion',
+            'descripcion' => 'OP de Reproceso creada automáticamente al aprobar solicitud para OP: ' . $original->numero_op,
+            'realizado_por_codigo' => session('user_code'),
+            'realizado_por_nombre' => session('user_name'),
+            'realizado_por_rol' => session('user_role'),
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Solicitud de reproceso aprobada y nueva OP creada con éxito.']);
+    }
+
+    /**
+     * Reject a reproceso request.
+     */
+    public function rechazarReproceso(Request $request, $id)
+    {
+        $solicitud = SolicitudReproceso::findOrFail($id);
+        
+        if ($solicitud->estado !== 'Pendiente') {
+            return response()->json(['success' => false, 'message' => 'Esta solicitud ya fue procesada.'], 400);
+        }
+
+        $request->validate([
+            'razon_rechazo' => 'required|string|max:1000',
+        ]);
+
+        $solicitud->update([
+            'estado' => 'Rechazado',
+            'razon_rechazo' => $request->razon_rechazo,
+        ]);
+
+        $original = $solicitud->ordenProduccion;
+
+        // Log to original OP history
+        $original->historial()->create([
+            'tipo_evento' => 'rechazo_reproceso',
+            'descripcion' => 'Solicitud de reproceso RECHAZADA por ' . session('user_name') . ' (' . session('user_code') . '). Razón: ' . $request->razon_rechazo,
+            'realizado_por_codigo' => session('user_code'),
+            'realizado_por_nombre' => session('user_name'),
+            'realizado_por_rol' => session('user_role'),
+        ]);
+
+        $this->clearDashboardCache();
+
+        return response()->json(['success' => true, 'message' => 'Solicitud de reproceso rechazada.']);
+    }
+
+    public function eliminarOP(Request $request, $id)
+    {
+        $op = OrdenProduccion::findOrFail($id);
+        $userRole = session('user_role');
+        $userCode = session('user_code');
+
+        // Only allow deletion if status is Terminado or Cancelado
+        if (!in_array($op->estado, ['Terminado', 'Cancelado'])) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => 'Solo se pueden eliminar órdenes con estado Terminado o Cancelado.'], 400);
+            }
+            return redirect()->route('op.admin')->with('error', 'Solo se pueden eliminar órdenes con estado Terminado o Cancelado.');
+        }
+
+        // Check permission
+        $hasPermission = false;
+        if ($userRole === 'admin') {
+            $hasPermission = true;
+        } elseif ($userRole === 'admin_branding') {
+            if ($op->categoria === 'Branding') {
+                $hasPermission = true;
+            } elseif (in_array($op->categoria, ['Reprocesos', 'Reproceso', 'REPROCESO']) && $op->original && $op->original->categoria === 'Branding') {
+                $hasPermission = true;
+            }
+        } elseif ($userRole === 'admin_promo') {
+            if ($op->categoria === 'Promocional') {
+                $hasPermission = true;
+            } elseif (in_array($op->categoria, ['Reprocesos', 'Reproceso', 'REPROCESO']) && $op->original && $op->original->categoria === 'Promocional') {
+                $hasPermission = true;
+            }
+        }
+
+        if (!$hasPermission) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => 'No tiene permisos para eliminar esta OP.'], 403);
+            }
+            return redirect()->route('op.admin')->with('error', 'No tiene permisos para eliminar esta OP.');
+        }
+
+        // Check if hard delete was requested
+        $hardDelete = $request->input('hard_delete') === 'true' || $request->input('hard_delete') === true;
+
+        if ($hardDelete) {
+            // Only super admin (role 'admin') can hard delete
+            if ($userRole !== 'admin') {
+                if ($request->ajax() || $request->wantsJson()) {
+                    return response()->json(['success' => false, 'message' => 'Solo el Administrador General/Super Admin puede eliminar permanentemente.'], 403);
+                }
+                return redirect()->route('op.admin')->with('error', 'Solo el Administrador General/Super Admin puede eliminar permanentemente.');
+            }
+            
+            // Hard delete
+            // First delete related records to avoid foreign key errors in databases like Postgres/Supabase
+            $op->archivos()->delete();
+            $op->solicitudesCambio()->delete();
+            $op->solicitudesReproceso()->delete();
+            $op->historial()->delete();
+            // Clear relationships
+            OrdenProduccion::where('reproceso_de_id', $op->id)->update(['reproceso_de_id' => null, 'parent_op_id' => null]);
+            $op->forceDelete();
+            
+            $this->clearDashboardCache();
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => true, 'message' => 'OP eliminada permanentemente con éxito.']);
+            }
+            return redirect()->route('op.admin')->with('success', 'OP eliminada permanentemente con éxito.');
+        } else {
+            // Soft delete
+            // Create history record before soft deleting so it's tracked
+            $op->historial()->create([
+                'tipo_evento' => 'eliminacion_soft',
+                'descripcion' => 'OP eliminada (Soft Delete) por ' . session('user_name') . ' (' . session('user_code') . ')',
+                'realizado_por_codigo' => $userCode,
+                'realizado_por_nombre' => session('user_name'),
+                'realizado_por_rol' => $userRole,
+            ]);
+
+            $op->delete();
+            
+            $this->clearDashboardCache();
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => true, 'message' => 'OP eliminada correctamente (Soft Delete).']);
+            }
+            return redirect()->route('op.admin')->with('success', 'OP eliminada correctamente (Soft Delete).');
+        }
+    }
+
+    private function clearDashboardCache()
+    {
+        \Illuminate\Support\Facades\Cache::forget('dashboard_stats_admin');
+        \Illuminate\Support\Facades\Cache::forget('dashboard_stats_admin_branding');
+        \Illuminate\Support\Facades\Cache::forget('dashboard_stats_admin_promo');
     }
 }

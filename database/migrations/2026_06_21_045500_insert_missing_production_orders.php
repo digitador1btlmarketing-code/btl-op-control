@@ -1,7 +1,7 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use App\Models\OrdenProduccion;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -158,8 +158,11 @@ return new class extends Migration
         ];
 
         foreach ($orders as $order) {
-            if (OrdenProduccion::where('numero_op', $order['numero_op'])->count() === 0) {
-                OrdenProduccion::create($order);
+            if (DB::table('orden_produccions')->where('numero_op', $order['numero_op'])->count() === 0) {
+                // Set default timestamps
+                $order['created_at'] = now();
+                $order['updated_at'] = now();
+                DB::table('orden_produccions')->insert($order);
             }
         }
     }
@@ -170,7 +173,7 @@ return new class extends Migration
     public function down(): void
     {
         // Delete seeded baseline test records
-        OrdenProduccion::whereIn('numero_op', [
+        DB::table('orden_produccions')->whereIn('numero_op', [
             'OP-2026-001', 'OP-2026-002', 'OP-2026-003', 'OP-2026-004', 'OP-2026-005', 'OP-2173', 'OP-2175'
         ])->delete();
     }

@@ -24,6 +24,8 @@ class AuthController extends Controller
                 return redirect('/op/tv?categoria=Branding');
             } elseif ($role === 'tv_promocional') {
                 return redirect('/op/tv?categoria=Promocional');
+            } elseif ($role === 'vista') {
+                return redirect('/op/vista');
             }
         }
         return view('auth.login');
@@ -65,6 +67,8 @@ class AuthController extends Controller
                 return redirect('/op/tv?categoria=Branding')->with('success', 'Acceso Pantalla TV Branding autorizado.');
             } elseif ($usuario->rol === 'tv_promocional') {
                 return redirect('/op/tv?categoria=Promocional')->with('success', 'Acceso Pantalla TV Promocional autorizado.');
+            } elseif ($usuario->rol === 'vista') {
+                return redirect('/op/vista')->with('success', 'Acceso Vista autorizado.');
             }
         }
 

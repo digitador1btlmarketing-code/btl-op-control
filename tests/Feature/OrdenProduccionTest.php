@@ -808,4 +808,377 @@ class OrdenProduccionTest extends TestCase
         $response->assertStatus(200);
         $this->assertCount(1, $response->viewData('solicitudes'));
     }
+
+    /**
+     * Test the new 'vista' role and its access restrictions.
+     */
+    public function test_vista_role_permissions_and_restrictions(): void
+    {
+        // Seed the vista user inside this test
+        $now = now();
+        \Illuminate\Support\Facades\DB::table('usuarios_acceso')->insertOrIgnore([
+            [
+                'codigo' => 'VISTA-PROD-2026',
+                'nombre' => 'USUARIO',
+                'apellido' => 'VISTA',
+                'rol' => 'vista',
+                'activo' => true,
+                'created_at' => $now,
+                'updated_at' => $now
+            ]
+        ]);
+
+        // 1. Log in with vista user access code
+        $response = $this->post('/', ['codigo_acceso' => 'VISTA-PROD-2026']);
+        $response->assertRedirect('/op/vista');
+        $this->assertEquals('vista', session('user_role'));
+
+        // 2. Can access vista panel
+        $response = $this->get('/op/vista');
+        $response->assertStatus(200);
+
+        // 3. Cannot access creation view
+        $response = $this->get('/op/nueva');
+        $response->assertRedirect('/');
+
+        // 4. Cannot submit order creation
+        $response = $this->post('/op/nueva', [
+            'categoria' => 'Branding',
+            'numero_op' => 'OP-VISTA-FAIL',
+            'proyecto' => 'Fail',
+            'presupuestista' => 'Fail',
+            'cliente' => 'Fail',
+            'marca' => 'Fail',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '10:00:00',
+            'entregar_a' => 'Cliente',
+        ]);
+        $response->assertRedirect('/');
+
+        // 5. Cannot reset database
+        $response = $this->post('/admin/ordenes/reset');
+        $response->assertRedirect('/');
+    }
+
+    /**
+     * Test uploading multiple files in store.
+     */
+    public function test_multiple_file_upload_in_store(): void
+    {
+        // Mock user as vendor
+        session([
+            'user_role' => 'ventas',
+            'user_code' => 'DAFNE-RAMIREZ-PROD-2026',
+            'user_name' => 'DAFNE',
+        ]);
+
+        \Illuminate\Support\Facades\Storage::fake('public');
+
+        $file1 = \Illuminate\Http\UploadedFile::fake()->create('document1.pdf', 500);
+        $file2 = \Illuminate\Http\UploadedFile::fake()->create('spreadsheet2.xlsx', 800);
+
+        $response = $this->post('/op/nueva', [
+            'categoria' => 'Branding',
+            'numero_op' => 'OP-MULTIFILE-TEST',
+            'proyecto' => 'Multi upload project',
+            'presupuestista' => 'Test Presup',
+            'cliente' => 'Test Client',
+            'marca' => 'Test Brand',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '12:00:00',
+            'entregar_a' => 'Cliente',
+            'brief' => [$file1, $file2]
+        ]);
+
+        $response->assertRedirect('/op/nueva');
+        
+        $op = OrdenProduccion::where('numero_op', 'OP-MULTIFILE-TEST')->first();
+        $this->assertNotNull($op);
+        
+        // Assert files are linked in database
+        $this->assertEquals(2, $op->archivos()->count());
+        $this->assertNotNull($op->brief); // first file path
+
+        $firstFile = $op->archivos->first();
+        $this->assertEquals('document1.pdf', $firstFile->file_name);
+        \Illuminate\Support\Facades\Storage::disk('public')->assertExists($firstFile->file_path);
+
+        $secondFile = $op->archivos->last();
+        $this->assertEquals('spreadsheet2.xlsx', $secondFile->file_name);
+        \Illuminate\Support\Facades\Storage::disk('public')->assertExists($secondFile->file_path);
+    }
+
+    /**
+     * Test the complete reproceso lifecycle (request, reject, request again, approve).
+     */
+    public function test_reprocesos_complete_workflow(): void
+    {
+        // 1. Create a base finished OP
+        $op = OrdenProduccion::create([
+            'categoria' => 'Branding',
+            'numero_op' => 'OP-ORIGINAL-TEST',
+            'proyecto' => 'Original Project',
+            'presupuestista' => 'Test Presup',
+            'cliente' => 'Test Client',
+            'marca' => 'Test Brand',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '12:00:00',
+            'entregar_a' => 'Cliente',
+            'estado' => 'Terminado',
+        ]);
+
+        // Mock vendor user session
+        session([
+            'user_role' => 'ventas',
+            'user_code' => 'DAFNE-RAMIREZ-PROD-2026',
+            'user_name' => 'DAFNE',
+        ]);
+
+        // 2. Submit reproceso request
+        $response = $this->post("/op/solicitar-reproceso/{$op->id}", [
+            'motivo' => 'Error de diseño',
+            'descripcion' => 'Necesitamos corregir los colores del branding principal.',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson(['success' => true]);
+
+        $this->assertDatabaseHas('solicitudes_reproceso', [
+            'orden_produccion_id' => $op->id,
+            'motivo' => 'Error de diseño',
+            'descripcion' => 'Necesitamos corregir los colores del branding principal.',
+            'estado' => 'Pendiente',
+            'solicitado_por_codigo' => 'DAFNE-RAMIREZ-PROD-2026',
+        ]);
+
+        $solicitud = \App\Models\SolicitudReproceso::first();
+        $this->assertNotNull($solicitud);
+
+        // Mock admin user session
+        session([
+            'user_role' => 'admin',
+            'user_code' => 'ADMIN-PROD-2026',
+            'user_name' => 'ADMINISTRADOR',
+        ]);
+
+        // 3. Reject first request
+        $response = $this->post("/admin/reproceso/rechazar/{$solicitud->id}", [
+            'razon_rechazo' => 'Falta información de contacto del cliente.',
+        ]);
+        $response->assertStatus(200);
+        $response->assertJson(['success' => true]);
+
+        $this->assertEquals('Rechazado', $solicitud->fresh()->estado);
+        $this->assertEquals('Falta información de contacto del cliente.', $solicitud->fresh()->razon_rechazo);
+
+        // Mock vendor user session again
+        session([
+            'user_role' => 'ventas',
+            'user_code' => 'DAFNE-RAMIREZ-PROD-2026',
+            'user_name' => 'DAFNE',
+        ]);
+
+        // 4. Request again
+        $response = $this->post("/op/solicitar-reproceso/{$op->id}", [
+            'motivo' => 'Solicitud del cliente',
+            'descripcion' => 'Corregido diseño solicitado por cliente.',
+        ]);
+        $response->assertStatus(200);
+
+        $nuevaSolicitud = \App\Models\SolicitudReproceso::where('estado', 'Pendiente')->first();
+        $this->assertNotNull($nuevaSolicitud);
+
+        // Mock admin user session again
+        session([
+            'user_role' => 'admin',
+            'user_code' => 'ADMIN-PROD-2026',
+            'user_name' => 'ADMINISTRADOR',
+        ]);
+
+        // 5. Approve request
+        $response = $this->post("/admin/reproceso/aprobar/{$nuevaSolicitud->id}", [
+            'numero_op' => 'OP-ORIGINAL-TEST-R',
+            'lider_produccion' => 'Test Leader',
+            'estado' => 'Pendiente',
+        ]);
+        $response->assertStatus(200);
+        $response->assertJson(['success' => true]);
+
+        $this->assertEquals('Aprobado', $nuevaSolicitud->fresh()->estado);
+
+        // Assert new reproceso OP is created
+        $reproOP = OrdenProduccion::where('reproceso_de_id', $op->id)->first();
+        $this->assertNotNull($reproOP);
+        $this->assertEquals('Reprocesos', $reproOP->categoria);
+        $this->assertEquals('OP-ORIGINAL-TEST-R', $reproOP->numero_op);
+        $this->assertEquals('Original Project (Reproceso)', $reproOP->proyecto);
+        $this->assertEquals('Pendiente', $reproOP->estado);
+        $this->assertEquals('Test Leader', $reproOP->lider_produccion);
+
+        // 6. Test that admin_branding sees it in query updates
+        session([
+            'user_role' => 'admin_branding',
+            'user_code' => 'ADMIN-BRANDING-2026',
+            'user_name' => 'ADMIN BRANDING',
+        ]);
+        
+        $response = $this->get("/op/admin/updates");
+        $response->assertStatus(200);
+        $data = $response->json();
+        
+        $ids = collect($data['ordenes'])->pluck('id')->toArray();
+        $this->assertTrue(in_array($reproOP->id, $ids));
+        
+        // 7. Test that admin_promo does NOT see it (since original OP category is Branding)
+        session([
+            'user_role' => 'admin_promo',
+            'user_code' => 'ADMIN-PROMO-2026',
+            'user_name' => 'ADMIN PROMO',
+        ]);
+        
+        $response = $this->get("/op/admin/updates");
+        $response->assertStatus(200);
+        $data = $response->json();
+        
+        $ids = collect($data['ordenes'])->pluck('id')->toArray();
+        $this->assertFalse(in_array($reproOP->id, $ids));
+    }
+
+    /**
+     * Test OP deletion permissions (soft delete and hard delete).
+     */
+    public function test_op_deletion_permissions(): void
+    {
+        $opBranding = OrdenProduccion::create([
+            'categoria' => 'Branding',
+            'numero_op' => 'OP-DEL-BRAND',
+            'proyecto' => 'Branding To Delete',
+            'presupuestista' => 'Test Presup',
+            'cliente' => 'Test Client',
+            'marca' => 'Test Brand',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '12:00:00',
+            'entregar_a' => 'Cliente',
+        ]);
+
+        $opPromo = OrdenProduccion::create([
+            'categoria' => 'Promocional',
+            'numero_op' => 'OP-DEL-PROMO',
+            'proyecto' => 'Promo To Delete',
+            'presupuestista' => 'Test Presup',
+            'cliente' => 'Test Client',
+            'marca' => 'Test Brand',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '12:00:00',
+            'entregar_a' => 'Cliente',
+        ]);
+
+        // 1. Non-admin user (ventas) cannot delete (redirects due to access middleware check)
+        session([
+            'user_role' => 'ventas',
+            'user_code' => 'DAFNE-RAMIREZ-PROD-2026',
+            'user_name' => 'DAFNE',
+        ]);
+        $response = $this->post("/op/eliminar/{$opBranding->id}");
+        $response->assertStatus(302); // Redirect back due to CheckAccess middleware
+
+        // 2. Admin Branding attempts to delete Branding OP in 'Pendiente' state -> returns 400
+        session([
+            'user_role' => 'admin_branding',
+            'user_code' => 'ADMIN-BRANDING-2026',
+            'user_name' => 'ADMIN BRANDING',
+        ]);
+        $response = $this->postJson("/op/eliminar/{$opBranding->id}");
+        $response->assertStatus(400);
+        $response->assertJson(['success' => false, 'message' => 'Solo se pueden eliminar órdenes con estado Terminado o Cancelado.']);
+
+        // Set status to Terminado to allow deletion
+        $opBranding->update(['estado' => 'Terminado']);
+        $opPromo->update(['estado' => 'Cancelado']);
+
+        // Admin Branding can delete Branding OPs (Soft Delete)
+        $response = $this->postJson("/op/eliminar/{$opBranding->id}");
+        $response->assertStatus(200);
+        $response->assertJson(['success' => true]);
+        $this->assertSoftDeleted('orden_produccions', ['id' => $opBranding->id]);
+
+        // Admin Branding CANNOT delete Promocional OPs
+        $response = $this->postJson("/op/eliminar/{$opPromo->id}");
+        $response->assertStatus(403);
+        $response->assertJson(['success' => false]);
+
+        // Admin Branding CANNOT perform hard deletes
+        $response = $this->postJson("/op/eliminar/{$opPromo->id}", ['hard_delete' => true]);
+        $response->assertStatus(403);
+
+        // 3. Super Admin (Master Admin) can delete anything (soft and hard)
+        session([
+            'user_role' => 'admin',
+            'user_code' => 'ADMIN-PROD-2026',
+            'user_name' => 'ADMINISTRADOR',
+        ]);
+        // Soft delete Promocional OP
+        $response = $this->postJson("/op/eliminar/{$opPromo->id}");
+        $response->assertStatus(200);
+        $response->assertJson(['success' => true]);
+        $this->assertSoftDeleted('orden_produccions', ['id' => $opPromo->id]);
+
+        // Hard delete OP (permanently)
+        $opPromo->restore(); // restore to test hard delete
+        $response = $this->postJson("/op/eliminar/{$opPromo->id}", ['hard_delete' => true]);
+        $response->assertStatus(200);
+        $response->assertJson(['success' => true]);
+        $this->assertDatabaseMissing('orden_produccions', ['id' => $opPromo->id]);
+    }
+
+    /**
+     * Test reproceso parent relationship.
+     */
+    public function test_reproceso_parent_relation(): void
+    {
+        $op = OrdenProduccion::create([
+            'categoria' => 'Branding',
+            'numero_op' => 'OP-PARENT-TEST',
+            'proyecto' => 'Parent Project',
+            'presupuestista' => 'Test Presup',
+            'cliente' => 'Test Client',
+            'marca' => 'Test Brand',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '12:00:00',
+            'entregar_a' => 'Cliente',
+            'estado' => 'Terminado',
+        ]);
+
+        session([
+            'user_role' => 'ventas',
+            'user_code' => 'DAFNE-RAMIREZ-PROD-2026',
+            'user_name' => 'DAFNE',
+        ]);
+
+        $this->post("/op/solicitar-reproceso/{$op->id}", [
+            'motivo' => 'Error de diseño',
+            'descripcion' => 'Re-run layout.',
+        ]);
+
+        $solicitud = \App\Models\SolicitudReproceso::where('estado', 'Pendiente')->first();
+
+        session([
+            'user_role' => 'admin',
+            'user_code' => 'ADMIN-PROD-2026',
+            'user_name' => 'ADMINISTRADOR',
+        ]);
+
+        $this->post("/admin/reproceso/aprobar/{$solicitud->id}", [
+            'numero_op' => 'OP-PARENT-TEST-R1',
+            'lider_produccion' => 'Test Leader',
+            'estado' => 'Pendiente',
+        ]);
+
+        $reproOP = OrdenProduccion::where('numero_op', 'OP-PARENT-TEST-R1')->first();
+        $this->assertNotNull($reproOP);
+        $this->assertEquals($op->id, $reproOP->reproceso_de_id);
+        $this->assertEquals($op->id, $reproOP->parent_op_id);
+        $this->assertEquals('OP-PARENT-TEST', $reproOP->parent->numero_op);
+    }
 }
+

@@ -115,6 +115,73 @@
     </div>
 </div>
 
+<!-- SECTION: SOLICITUDES DE REPROCESO -->
+<div class="card" id="solicitudes-reproceso-card" style="margin-bottom: 25px; border-color: rgba(255, 51, 102, 0.25);">
+    <h3 style="font-size: 1.25rem; font-weight: 800; color: #ff3366; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
+        🔄 Solicitudes de Reproceso Pendientes
+    </h3>
+    <div id="solicitudes-reproceso-container">
+        @if($solicitudesReproceso->count() === 0)
+            <p id="no-solicitudes-reproceso-msg" style="color: var(--text-muted); font-size: 0.95rem; font-style: italic;">No hay solicitudes de reproceso pendientes de aprobación.</p>
+        @else
+            <div style="overflow-x: auto;">
+                <table class="table-tv" style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+                    <thead>
+                        <tr>
+                            <th>OP Original</th>
+                            <th>Cliente / Proyecto</th>
+                            <th>Motivo / Descripción</th>
+                            <th>Requerido Para</th>
+                            <th>Adjunto</th>
+                            <th>Solicitado Por</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="solicitudes-reproceso-table-body">
+                        @foreach($solicitudesReproceso as $req)
+                            <tr id="req-repro-row-{{ $req->id }}">
+                                <td><strong>{{ $req->ordenProduccion->numero_op ?? 'OP' }}</strong></td>
+                                <td>
+                                    {{ $req->ordenProduccion->cliente ?? '-' }}<br>
+                                    <small style="color: var(--text-muted);">{{ $req->ordenProduccion->proyecto ?? '-' }}</small>
+                                </td>
+                                <td style="max-width: 250px; white-space: normal;">
+                                    <strong style="color: var(--blue-bright);">{{ $req->motivo }}</strong><br>
+                                    <small style="color: var(--text-white);">{{ $req->descripcion }}</small>
+                                </td>
+                                <td>
+                                    {{ $req->fecha_requerida ? \Carbon\Carbon::parse($req->fecha_requerida)->format('d/m/Y') : 'Sin especificar' }}
+                                </td>
+                                <td>
+                                    @if($req->archivo_adjunto)
+                                        <a href="/storage/{{ $req->archivo_adjunto }}" target="_blank" class="btn-view-brief" style="background: rgba(0, 210, 255, 0.15); color: var(--blue-bright); border: 1px solid rgba(0, 210, 255, 0.3); padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; text-decoration: none; white-space: nowrap;">Descargar</a>
+                                    @else
+                                        -
+                                    @endif
+                                </td>
+                                <td>{{ $req->solicitado_por_nombre }}<br><small style="color: var(--text-muted);">{{ $req->solicitado_por_codigo }}</small></td>
+                                <td>
+                                    <div style="display: flex; gap: 5px;">
+                                        <button onclick="approveReproceso({{ $req->id }})" class="btn-save-inline" style="background: rgba(0, 242, 195, 0.15); border-color: rgba(0, 242, 195, 0.3); color: var(--green-lime);">
+                                            Aprobar y Crear OP
+                                        </button>
+                                        <button onclick="rejectReproceso({{ $req->id }})" class="btn-logout" style="padding: 4px 10px; font-size: 0.8rem; cursor: pointer; background: rgba(255, 51, 102, 0.15); border-color: rgba(255, 51, 102, 0.3);">
+                                            Rechazar
+                                        </button>
+                                        <button onclick="selectOrder({{ $req->orden_produccion_id }})" class="btn-save-inline" style="background: rgba(0, 210, 255, 0.15); border-color: rgba(0, 210, 255, 0.3); color: var(--blue-bright);">
+                                            Ver original
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
+    </div>
+</div>
+
 <!-- Main Table -->
 <div class="card">
     <style>
@@ -204,11 +271,12 @@
     </div>
     
     <!-- Category Tabs -->
-    @if(session('user_role') === 'admin')
+    @if(in_array(session('user_role'), ['admin', 'admin_branding', 'admin_promo']))
     <div class="category-tabs-container">
         <button class="category-tab active" data-category="todos" onclick="selectCategoryTab('todos')">Todas</button>
         <button class="category-tab" data-category="Branding" onclick="selectCategoryTab('Branding')">Branding</button>
         <button class="category-tab" data-category="Promocional" onclick="selectCategoryTab('Promocional')">Promocional</button>
+        <button class="category-tab" data-category="Reprocesos" onclick="selectCategoryTab('Reprocesos')">Reprocesos</button>
     </div>
     @endif
     
@@ -240,8 +308,12 @@
                             </div>
                         </td>
                         <td>
-                            <span class="badge {{ $orden->categoria === 'Branding' ? 'badge-normal' : 'badge-proxima' }}">
-                                {{ $orden->categoria }}
+                            @php
+                                $badgeCategoryClass = $orden->categoria === 'Branding' ? 'badge-normal' : 
+                                                      ($orden->categoria === 'Promocional' ? 'badge-proxima' : '');
+                            @endphp
+                            <span class="badge {{ $badgeCategoryClass }}" style="{{ $orden->categoria === 'Reprocesos' ? 'background: rgba(255, 95, 56, 0.15); color: #ff5f38; border: 1px solid rgba(255, 95, 56, 0.3);' : '' }}">
+                                {{ $orden->categoria === 'Reprocesos' ? 'REPROCESO' : $orden->categoria }}
                             </span>
                         </td>
                         <td>{{ $orden->marca }}</td>
@@ -394,6 +466,14 @@
         </div>
     </div>
     
+    <!-- Reproceso request block and history -->
+    <div id="reproceso-action-container" style="margin-top: 15px;"></div>
+
+    <div id="detail-reprocesos-section" style="margin-top: 15px; border-top: 1px solid var(--border-glass); padding-top: 15px;">
+        <h4 style="font-size: 1.05rem; color: var(--priority-proxima); margin-bottom: 10px; font-weight: 700;">🔄 Historial de Reprocesos</h4>
+        <div id="detail-reprocesos-content">-</div>
+    </div>
+    
     <!-- Date change request section in details -->
     <div id="detail-date-change-section" style="margin-top: 15px; border-top: 1px solid var(--border-glass); padding-top: 15px;">
         <h4 style="font-size: 1.05rem; color: var(--blue-bright); margin-bottom: 10px; font-weight: 700;">Solicitud de Cambio de Fecha</h4>
@@ -404,6 +484,9 @@
             </a>
             <button id="btn-request-date-change" onclick="openRequestDateChangeModal()" class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 0.85rem; display: none;">
                 Solicitar cambio de fecha
+            </button>
+            <button id="btn-delete-op" onclick="openDeleteOPModal()" class="btn-logout" style="width: auto; padding: 8px 16px; font-size: 0.85rem; display: none; align-items: center; gap: 5px; margin: 0; background: rgba(255, 51, 102, 0.15); border-color: rgba(255, 51, 102, 0.3); color: var(--priority-urgente);">
+                🗑️ Eliminar OP
             </button>
         </div>
     </div>
@@ -442,6 +525,73 @@
             Cerrar
         </button>
     </div>
+</div>
+
+<!-- Delete Order Double-Confirmation Modal -->
+<div id="delete-op-modal" class="custom-modal-overlay hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-modal-overlay); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 9999; transition: var(--transition);">
+    <form id="delete-op-form" action="" method="POST" class="card" style="max-width: 480px; width: 90%; border-color: rgba(255, 51, 102, 0.3); box-shadow: var(--card-shadow); text-align: left; padding: 25px; margin-bottom: 0;">
+        @csrf
+        <h3 style="font-size: 1.25rem; font-weight: 800; color: var(--priority-urgente); margin-bottom: 15px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid rgba(255,51,102,0.15); padding-bottom: 8px; margin-top: 0;">
+            ⚠️ Eliminar Orden de Producción
+        </h3>
+        
+        <div id="delete-step-1">
+            <p style="color: var(--text-white); font-size: 0.95rem; margin-bottom: 15px; line-height: 1.5;">
+                ¿Está seguro de que desea eliminar la orden <strong id="delete-op-num" style="color: var(--blue-bright);"></strong>?
+            </p>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px; line-height: 1.4; background: rgba(255,255,255,0.02); padding: 10px; border-radius: 6px; border: 1px solid var(--border-glass);">
+                Por defecto se realizará un <strong>Soft Delete</strong> (la orden quedará oculta pero se mantendrá en el historial interno).
+            </p>
+            
+            <div style="margin-bottom: 20px;">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; color: var(--text-white); font-size: 0.9rem; user-select: none;">
+                    <input type="checkbox" id="confirm-delete-check-1" style="transform: scale(1.2); cursor: pointer;">
+                    <span>Confirmo que deseo eliminar esta orden de producción</span>
+                </label>
+            </div>
+            
+            @if(session('user_role') === 'admin')
+            <div style="margin-bottom: 25px; background: rgba(255, 51, 102, 0.05); border: 1px solid rgba(255, 51, 102, 0.2); padding: 12px; border-radius: 8px;" id="hard-delete-container">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; color: var(--priority-urgente); font-weight: 700; font-size: 0.9rem; user-select: none;">
+                    <input type="checkbox" id="hard-delete-check" name="hard_delete" value="true" style="transform: scale(1.2); cursor: pointer;">
+                    <span>Eliminar permanentemente (Hard Delete)</span>
+                </label>
+                <div style="color: var(--text-muted); font-size: 0.75rem; margin-top: 4px; padding-left: 24px;">
+                    Esta opción eliminará la OP y todos sus registros relacionados (historial, adjuntos, solicitudes) de forma definitiva en la base de datos.
+                </div>
+            </div>
+            @endif
+            
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button type="button" onclick="closeDeleteOPModal()" class="filter-btn" style="padding: 8px 16px; font-size: 0.9rem; font-weight: 600;">
+                    Cancelar
+                </button>
+                <button type="button" id="btn-proceed-delete-step2" onclick="proceedToDeleteStep2()" class="btn-logout" style="padding: 8px 16px; font-size: 0.9rem; font-weight: 700; margin: 0; background: rgba(255, 51, 102, 0.15); border-color: rgba(255, 51, 102, 0.3);">
+                    Siguiente
+                </button>
+            </div>
+        </div>
+
+        <div id="delete-step-2" class="hidden">
+            <p style="color: var(--text-white); font-size: 0.95rem; margin-bottom: 15px; line-height: 1.5;">
+                <strong>Confirmación Doble Requerida:</strong>
+            </p>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">
+                Para confirmar la eliminación, escriba <strong style="color: var(--priority-urgente);">ELIMINAR</strong> a continuación:
+            </p>
+            
+            <input type="text" id="confirm-delete-text" placeholder="ELIMINAR" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid rgba(255, 51, 102, 0.3); background: rgba(0, 0, 0, 0.2); color: var(--text-white); font-size: 0.95rem; font-weight: 700; text-transform: uppercase; margin-bottom: 20px; box-sizing: border-box;">
+            
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button type="button" onclick="backToDeleteStep1()" class="filter-btn" style="padding: 8px 16px; font-size: 0.9rem; font-weight: 600;">
+                    Atrás
+                </button>
+                <button type="submit" id="btn-confirm-delete-final" class="btn-logout" style="padding: 8px 16px; font-size: 0.9rem; font-weight: 700; margin: 0; background: var(--priority-urgente); border-color: var(--priority-urgente); color: var(--text-white);" disabled>
+                    Confirmar y Eliminar
+                </button>
+            </div>
+        </div>
+    </form>
 </div>
 
 <!-- Secure Reset Modal -->
@@ -571,6 +721,7 @@
                     <option value="jefe_ventas">Jefe de Ventas</option>
                     <option value="admin_branding">Administrador de Branding</option>
                     <option value="admin_promo">Administrador de Promocional</option>
+                    <option value="vista">Vista (Solo Consulta)</option>
                 </select>
             </div>
 
@@ -621,6 +772,7 @@
                     <option value="jefe_ventas">Jefe de Ventas</option>
                     <option value="admin_branding">Administrador de Branding</option>
                     <option value="admin_promo">Administrador de Promocional</option>
+                    <option value="vista">Vista (Solo Consulta)</option>
                 </select>
             </div>
 
@@ -735,6 +887,68 @@
             
             <div style="display: flex; gap: 12px; justify-content: flex-end;">
                 <button type="button" onclick="closeRejectRequestModal()" class="filter-btn" style="padding: 10px 20px; width: auto; font-weight: 600;">Cancelar</button>
+                <button type="submit" class="btn-primary" style="background: var(--priority-urgente); border-color: var(--priority-urgente); width: auto; padding: 10px 25px; font-weight: 700;">Rechazar Solicitud</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Approve Reproceso Modal -->
+<div id="approve-reproceso-modal" class="custom-modal-overlay hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-modal-overlay); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 10000; transition: var(--transition);">
+    <div class="card" style="max-width: 500px; width: 90%; border-color: rgba(0, 242, 195, 0.4); box-shadow: var(--card-shadow); padding: 30px; margin-bottom: 0;">
+        <h3 style="font-size: 1.3rem; font-weight: 800; color: var(--green-lime); margin-top: 0; margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
+            ✅ Aprobar Reproceso y Crear OP
+        </h3>
+        
+        <form id="approve-reproceso-form" onsubmit="submitApproveReproceso(event)">
+            @csrf
+            <input type="hidden" id="approve-reproceso-id">
+            
+            <div class="form-group" style="text-align: left; margin-bottom: 15px;">
+                <label for="approve-reproceso-op">Código de Reproceso (Número OP) *</label>
+                <input type="text" id="approve-reproceso-op" required class="form-control" placeholder="Ej: OP-2173-R1">
+            </div>
+
+            <div class="form-group" style="text-align: left; margin-bottom: 15px;">
+                <label for="approve-reproceso-lider">Líder de Producción</label>
+                <input type="text" id="approve-reproceso-lider" class="form-control" placeholder="Nombre del líder (opcional)">
+            </div>
+
+            <div class="form-group" style="text-align: left; margin-bottom: 20px;">
+                <label for="approve-reproceso-estado">Estado Inicial *</label>
+                <select id="approve-reproceso-estado" required style="width: 100%;">
+                    <option value="Pendiente" selected>Pendiente</option>
+                    <option value="En proceso">En proceso</option>
+                    <option value="En espera">En espera</option>
+                </select>
+            </div>
+            
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button type="button" onclick="closeApproveReprocesoModal()" class="filter-btn" style="padding: 10px 20px; width: auto; font-weight: 600;">Cancelar</button>
+                <button type="submit" class="btn-primary" style="background: var(--green-lime); border-color: var(--green-lime); color: var(--bg-dark); width: auto; padding: 10px 25px; font-weight: 700;">Aprobar y Crear</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Reject Reproceso Modal -->
+<div id="reject-reproceso-modal" class="custom-modal-overlay hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-modal-overlay); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 10000; transition: var(--transition);">
+    <div class="card" style="max-width: 480px; width: 90%; border-color: rgba(255, 51, 102, 0.4); box-shadow: var(--card-shadow); padding: 30px; margin-bottom: 0;">
+        <h3 style="font-size: 1.3rem; font-weight: 800; color: var(--priority-urgente); margin-top: 0; margin-bottom: 20px;">
+            ❌ Rechazar Solicitud de Reproceso
+        </h3>
+        
+        <form id="reject-reproceso-form" onsubmit="submitRejectReproceso(event)">
+            @csrf
+            <input type="hidden" id="reject-reproceso-id">
+            
+            <div class="form-group" style="text-align: left; margin-bottom: 20px;">
+                <label for="reject-reproceso-razon">Razón del Rechazo *</label>
+                <textarea id="reject-reproceso-razon" class="form-control" rows="3" required placeholder="Escriba el motivo por el cual se rechaza este reproceso..." style="resize: none;"></textarea>
+            </div>
+            
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button type="button" onclick="closeRejectReprocesoModal()" class="filter-btn" style="padding: 10px 20px; width: auto; font-weight: 600;">Cancelar</button>
                 <button type="submit" class="btn-primary" style="background: var(--priority-urgente); border-color: var(--priority-urgente); width: auto; padding: 10px 25px; font-weight: 700;">Rechazar Solicitud</button>
             </div>
         </form>
@@ -925,11 +1139,27 @@
         document.getElementById('detail-entregar-a').textContent = order.entregar_a;
         
         const briefDiv = document.getElementById('detail-brief');
-        if (order.brief) {
-            briefDiv.innerHTML = `<a href="/op/descargar-brief/${order.id}" target="_blank" class="btn-view-brief" style="background: rgba(0, 210, 255, 0.15); color: var(--blue-bright); border: 1px solid rgba(0, 210, 255, 0.3); padding: 4px 10px; border-radius: 6px; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 5px;">Ver Plano</a>`;
+        let filesHtml = '';
+        if (order.archivos && order.archivos.length > 0) {
+            order.archivos.forEach((file) => {
+                const fileName = file.file_name || 'Archivo';
+                filesHtml += `
+                    <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: var(--text-white); font-size: 0.9rem; word-break: break-all;">${fileName}</span>
+                        <a href="/op/descargar-archivo/${file.id}" target="_blank" class="btn-view-brief" style="background: rgba(0, 210, 255, 0.15); color: var(--blue-bright); border: 1px solid rgba(0, 210, 255, 0.3); padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; text-decoration: none; white-space: nowrap;">Descargar</a>
+                    </div>`;
+            });
+        } else if (order.brief) {
+            const fileName = order.brief.split('/').pop() || 'Plano';
+            filesHtml = `
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="color: var(--text-white); font-size: 0.9rem; word-break: break-all;">${fileName}</span>
+                    <a href="/op/descargar-brief/${order.id}" target="_blank" class="btn-view-brief" style="background: rgba(0, 210, 255, 0.15); color: var(--blue-bright); border: 1px solid rgba(0, 210, 255, 0.3); padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; text-decoration: none; white-space: nowrap;">Descargar</a>
+                </div>`;
         } else {
-            briefDiv.textContent = '-';
+            filesHtml = '-';
         }
+        briefDiv.innerHTML = filesHtml;
 
         const pdfBtn = document.getElementById('btn-download-pdf-op');
         if (pdfBtn) {
@@ -1022,7 +1252,181 @@
             if (btnChange) btnChange.style.display = 'inline-block';
         }
 
-        // Timeline of history loading is now handled inside the collapsible history modal
+        // Reprocesos request block and history
+        const actionContainer = document.getElementById('reproceso-action-container');
+        if (actionContainer) {
+            actionContainer.innerHTML = '';
+            if (order.estado === 'Terminado') {
+                const pendingReproceso = order.solicitudes_reproceso ? order.solicitudes_reproceso.find(s => s.estado === 'Pendiente') : null;
+                const hasActiveReproceso = order.reprocesos && order.reprocesos.some(r => r.estado !== 'Cancelado');
+                
+                if (pendingReproceso) {
+                    let attachmentHtml = '';
+                    if (pendingReproceso.archivo_adjunto) {
+                        attachmentHtml = `<br><strong>Adjunto:</strong> <a href="/storage/${pendingReproceso.archivo_adjunto}" target="_blank" style="color: var(--blue-bright); text-decoration: underline;">Descargar archivo</a>`;
+                    }
+                    let reqDateStr = 'Sin especificar';
+                    if (pendingReproceso.fecha_requerida) {
+                        reqDateStr = pendingReproceso.fecha_requerida.split('-').reverse().join('/');
+                    }
+                    actionContainer.innerHTML = `
+                        <div style="background: rgba(255, 95, 56, 0.08); border: 1px solid rgba(255, 95, 56, 0.2); padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 0.85rem; line-height: 1.4; text-align: left;">
+                            <strong style="color: #ff5f38; display: block; margin-bottom: 5px;">⏳ Solicitud de Reproceso Pendiente</strong>
+                            <strong>Solicitado por:</strong> ${pendingReproceso.solicitado_por_nombre || 'Desconocido'}<br>
+                            <strong>Motivo:</strong> ${pendingReproceso.motivo || '-'}<br>
+                            <strong>Descripción:</strong> <span style="font-style: italic;">"${pendingReproceso.descripcion || '-'}"</span><br>
+                            <strong>Fecha requerida:</strong> ${reqDateStr}
+                            ${attachmentHtml}
+                        </div>
+                    `;
+                } else if (hasActiveReproceso) {
+                    const rep = order.reprocesos.find(r => r.estado !== 'Cancelado');
+                    actionContainer.innerHTML = `<span class="badge badge-proceso" style="padding: 6px 12px; font-size: 0.85rem; display: inline-block;">🔄 Ya existe un reproceso activo: <strong>${rep.numero_op}</strong></span>`;
+                }
+            }
+        }
+
+        const reprocesosDiv = document.getElementById('detail-reprocesos-content');
+        if (reprocesosDiv) {
+            if (order.reprocesos && order.reprocesos.length > 0) {
+                let html = '<table style="width:100%; font-size:0.85rem; border-collapse:collapse; text-align:left;">';
+                html += '<thead><tr style="border-bottom:1px solid var(--border-glass);"><th style="padding:4px;">Código OP</th><th style="padding:4px;">Estado</th><th style="padding:4px;">Líder</th></tr></thead><tbody>';
+                order.reprocesos.forEach(rep => {
+                    let badgeClass = 'badge-pendiente';
+                    if (rep.estado === 'En proceso') badgeClass = 'badge-proceso';
+                    if (rep.estado === 'Terminado') badgeClass = 'badge-terminado';
+                    if (rep.estado === 'Cancelado') badgeClass = 'badge-cancelado';
+                    if (rep.estado === 'En espera') badgeClass = 'badge-en-espera';
+                    html += `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);"><td style="padding:6px 4px;"><strong>${rep.numero_op}</strong></td><td style="padding:6px 4px;"><span class="badge ${badgeClass}">${rep.estado}</span></td><td style="padding:6px 4px;">${rep.lider_produccion || '<em>Sin asignar</em>'}</td></tr>`;
+                });
+                html += '</tbody></table>';
+                reprocesosDiv.innerHTML = html;
+            } else {
+                reprocesosDiv.innerHTML = '<span style="color: var(--text-muted); font-style: italic;">Sin reprocesos</span>';
+            }
+        }
+
+        // Toggle Delete OP button depending on permission
+        const deleteBtn = document.getElementById('btn-delete-op');
+        if (deleteBtn) {
+            let canDelete = false;
+            if (loggedInUserRole === 'admin') {
+                canDelete = true;
+            } else if (loggedInUserRole === 'admin_branding' && order.categoria === 'Branding') {
+                canDelete = true;
+            } else if (loggedInUserRole === 'admin_promo' && order.categoria === 'Promocional') {
+                canDelete = true;
+            }
+
+            if (canDelete && (order.estado === 'Terminado' || order.estado === 'Cancelado')) {
+                deleteBtn.style.display = 'inline-flex';
+            } else {
+                deleteBtn.style.display = 'none';
+            }
+        }
+    }
+
+    function approveReproceso(id) {
+        const row = document.getElementById(`req-repro-row-${id}`);
+        let originalOp = '';
+        if (row) {
+            const opTd = row.querySelector('td:first-child');
+            if (opTd) originalOp = opTd.textContent.trim();
+        }
+        
+        document.getElementById('approve-reproceso-id').value = id;
+        document.getElementById('approve-reproceso-op').value = originalOp ? `${originalOp}-R1` : '';
+        document.getElementById('approve-reproceso-lider').value = '';
+        document.getElementById('approve-reproceso-estado').value = 'Pendiente';
+        document.getElementById('approve-reproceso-modal').classList.remove('hidden');
+    }
+
+    function closeApproveReprocesoModal() {
+        document.getElementById('approve-reproceso-modal').classList.add('hidden');
+    }
+
+    function submitApproveReproceso(event) {
+        event.preventDefault();
+        const id = document.getElementById('approve-reproceso-id').value;
+        const op = document.getElementById('approve-reproceso-op').value;
+        const lider = document.getElementById('approve-reproceso-lider').value;
+        const estado = document.getElementById('approve-reproceso-estado').value;
+
+        fetch(`/admin/reproceso/aprobar/${id}`, {
+            method: 'POST',
+            body: JSON.stringify({
+                numero_op: op,
+                lider_produccion: lider,
+                estado: estado
+            }),
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
+        })
+        .then(res => res.json())
+        .then(data => {
+            closeApproveReprocesoModal();
+            if (data.success) {
+                showToast(data.message, 'success');
+                pollAdminUpdates();
+                hideDetail();
+            } else {
+                showToast(data.message, 'error');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            closeApproveReprocesoModal();
+            showToast('Error de red al aprobar.', 'error');
+        });
+    }
+
+    function rejectReproceso(id) {
+        document.getElementById('reject-reproceso-id').value = id;
+        document.getElementById('reject-reproceso-razon').value = '';
+        document.getElementById('reject-reproceso-modal').classList.remove('hidden');
+    }
+
+    function closeRejectReprocesoModal() {
+        document.getElementById('reject-reproceso-modal').classList.add('hidden');
+    }
+
+    function submitRejectReproceso(event) {
+        event.preventDefault();
+        const id = document.getElementById('reject-reproceso-id').value;
+        const razon = document.getElementById('reject-reproceso-razon').value;
+
+        fetch(`/admin/reproceso/rechazar/${id}`, {
+            method: 'POST',
+            body: JSON.stringify({
+                razon_rechazo: razon
+            }),
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
+        })
+        .then(res => res.json())
+        .then(data => {
+            closeRejectReprocesoModal();
+            if (data.success) {
+                showToast(data.message, 'success');
+                pollAdminUpdates();
+                hideDetail();
+            } else {
+                showToast(data.message, 'error');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            closeRejectReprocesoModal();
+            showToast('Error de red al rechazar.', 'error');
+        });
     }
 
     function createRowElement(orden) {
@@ -1046,7 +1450,10 @@
         }
 
         const fireClass = (orden.estado === 'Terminado' || orden.estado === 'Cancelado') ? 'extinguished' : (!orden.mostrar_fuego ? 'hidden-fire' : '');
-        const badgeCategoryClass = orden.categoria === 'Branding' ? 'badge-normal' : 'badge-proxima';
+        const badgeCategoryClass = orden.categoria === 'Branding' ? 'badge-normal' : 
+                                  (orden.categoria === 'Promocional' ? 'badge-proxima' : '');
+        const styleCategory = orden.categoria === 'Reprocesos' ? 'background: rgba(255, 95, 56, 0.15); color: #ff5f38; border: 1px solid rgba(255, 95, 56, 0.3);' : '';
+        const catText = orden.categoria === 'Reprocesos' ? 'REPROCESO' : orden.categoria;
         
         const progressFillClass = orden.estado === 'Pendiente' ? 'progress-fill-pendiente' :
                                   (orden.estado === 'En proceso' ? 'progress-fill-proceso' :
@@ -1063,8 +1470,8 @@
                 </div>
             </td>
             <td>
-                <span class="badge ${badgeCategoryClass}">
-                    ${orden.categoria}
+                <span class="badge ${badgeCategoryClass}" style="${styleCategory}">
+                    ${catText}
                 </span>
             </td>
             <td>${orden.marca}</td>
@@ -1127,7 +1534,7 @@
     let pollingTimer = null;
     let resumeTimer = null;
     let isUserInteracting = false;
-    const POLLING_INTERVAL_MS = 5000;
+    const POLLING_INTERVAL_MS = 10000;
 
     function startPolling() {
         stopPolling();
@@ -1328,8 +1735,8 @@
                         const dtSol = new Date(req.fecha_solicitada).toLocaleDateString('es-NI') + ' ' + req.hora_solicitada.substring(0, 5);
                         tableHtml += `
                             <tr id="req-row-${req.id}">
-                                <td><strong>${req.orden_produccion.numero_op}</strong></td>
-                                <td>${req.orden_produccion.cliente}<br><small style="color: var(--text-muted);">${req.orden_produccion.marca}</small></td>
+                                <td><strong>${req.orden_produccion ? req.orden_produccion.numero_op : 'OP'}</strong></td>
+                                <td>${req.orden_produccion ? req.orden_produccion.cliente : '-'}<br><small style="color: var(--text-muted);">${req.orden_produccion ? req.orden_produccion.marca : '-'}</small></td>
                                 <td>${dtAct}</td>
                                 <td><strong style="color: var(--blue-bright);">${dtSol}</strong></td>
                                 <td style="max-width: 250px; white-space: normal;">${req.razon_solicitud}</td>
@@ -1357,6 +1764,78 @@
                         </div>
                     `;
                     solContainer.innerHTML = tableHtml;
+                }
+            }
+
+            // Sync solicitudes reproceso container
+            if (data.solicitudes_reproceso) {
+                const reproContainer = document.getElementById('solicitudes-reproceso-container');
+                const newRepRequests = data.solicitudes_reproceso;
+                if (newRepRequests.length === 0) {
+                    reproContainer.innerHTML = `<p id="no-solicitudes-reproceso-msg" style="color: var(--text-muted); font-size: 0.95rem; font-style: italic;">No hay solicitudes de reproceso pendientes de aprobación.</p>`;
+                } else {
+                    let tableHtml = `
+                        <div style="overflow-x: auto;">
+                            <table class="table-tv" style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+                                <thead>
+                                    <tr>
+                                        <th>OP Original</th>
+                                        <th>Cliente / Proyecto</th>
+                                        <th>Motivo / Descripción</th>
+                                        <th>Requerido Para</th>
+                                        <th>Adjunto</th>
+                                        <th>Solicitado Por</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="solicitudes-reproceso-table-body">
+                    `;
+
+                    newRepRequests.forEach(req => {
+                        const opNumber = req.orden_produccion ? req.orden_produccion.numero_op : 'OP';
+                        const opCliente = req.orden_produccion ? req.orden_produccion.cliente : '-';
+                        const opProyecto = req.orden_produccion ? req.orden_produccion.proyecto : '-';
+                        const reqDate = req.fecha_requerida ? new Date(req.fecha_requerida).toLocaleDateString('es-NI') : 'Sin especificar';
+                        const fileHtml = req.archivo_adjunto ? 
+                            `<a href="/storage/${req.archivo_adjunto}" target="_blank" class="btn-view-brief" style="background: rgba(0, 210, 255, 0.15); color: var(--blue-bright); border: 1px solid rgba(0, 210, 255, 0.3); padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; text-decoration: none; white-space: nowrap;">Descargar</a>` : '-';
+                        
+                        tableHtml += `
+                            <tr id="req-repro-row-${req.id}">
+                                <td><strong>${opNumber}</strong></td>
+                                <td>
+                                    ${opCliente}<br>
+                                    <small style="color: var(--text-muted);">${opProyecto}</small>
+                                </td>
+                                <td style="max-width: 250px; white-space: normal;">
+                                    <strong style="color: var(--blue-bright);">${req.motivo}</strong><br>
+                                    <small style="color: var(--text-white);">${req.descripcion}</small>
+                                </td>
+                                <td>${reqDate}</td>
+                                <td>${fileHtml}</td>
+                                <td>${req.solicitado_por_nombre}<br><small style="color: var(--text-muted);">${req.solicitado_por_codigo}</small></td>
+                                <td>
+                                    <div style="display: flex; gap: 5px;">
+                                        <button onclick="approveReproceso(${req.id})" class="btn-save-inline" style="background: rgba(0, 242, 195, 0.15); border-color: rgba(0, 242, 195, 0.3); color: var(--green-lime);">
+                                            Aprobar y Crear OP
+                                        </button>
+                                        <button onclick="rejectReproceso(${req.id})" class="btn-logout" style="padding: 4px 10px; font-size: 0.8rem; cursor: pointer; background: rgba(255, 51, 102, 0.15); border-color: rgba(255, 51, 102, 0.3);">
+                                            Rechazar
+                                        </button>
+                                        <button onclick="selectOrder(${req.orden_produccion_id})" class="btn-save-inline" style="background: rgba(0, 210, 255, 0.15); border-color: rgba(0, 210, 255, 0.3); color: var(--blue-bright);">
+                                            Ver original
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    });
+
+                    tableHtml += `
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                    reproContainer.innerHTML = tableHtml;
                 }
             }
 
@@ -1882,6 +2361,49 @@
         });
     }
 
+    function openDeleteOPModal() {
+        if (!selectedOrder) return;
+        
+        document.getElementById('delete-op-num').textContent = selectedOrder.numero_op;
+        document.getElementById('delete-op-form').action = `/op/eliminar/${selectedOrder.id}`;
+        
+        // Reset steps
+        document.getElementById('delete-step-1').classList.remove('hidden');
+        document.getElementById('delete-step-2').classList.add('hidden');
+        
+        // Reset checkbox & text inputs
+        document.getElementById('confirm-delete-check-1').checked = false;
+        const hardCheck = document.getElementById('hard-delete-check');
+        if (hardCheck) hardCheck.checked = false;
+        
+        const confirmText = document.getElementById('confirm-delete-text');
+        confirmText.value = '';
+        document.getElementById('btn-confirm-delete-final').disabled = true;
+        
+        document.getElementById('delete-op-modal').classList.remove('hidden');
+    }
+
+    function closeDeleteOPModal() {
+        document.getElementById('delete-op-modal').classList.add('hidden');
+    }
+
+    function proceedToDeleteStep2() {
+        const isChecked = document.getElementById('confirm-delete-check-1').checked;
+        if (!isChecked) {
+            alert('Por favor, confirme que desea eliminar la orden marcando la casilla.');
+            return;
+        }
+        
+        document.getElementById('delete-step-1').classList.add('hidden');
+        document.getElementById('delete-step-2').classList.remove('hidden');
+        document.getElementById('confirm-delete-text').focus();
+    }
+
+    function backToDeleteStep1() {
+        document.getElementById('delete-step-2').classList.add('hidden');
+        document.getElementById('delete-step-1').classList.remove('hidden');
+    }
+
     // Dynamic role listener to show/hide Chief selector in creation/edit forms
     document.addEventListener('DOMContentLoaded', function() {
         const newUserRol = document.getElementById('new-user-rol');
@@ -1915,6 +2437,14 @@
                 }
             };
             editUserRol.addEventListener('change', toggleEditJefeGroup);
+        }
+
+        const confirmText = document.getElementById('confirm-delete-text');
+        if (confirmText) {
+            confirmText.addEventListener('input', function(e) {
+                const val = e.target.value.trim().toUpperCase();
+                document.getElementById('btn-confirm-delete-final').disabled = (val !== 'ELIMINAR');
+            });
         }
     });
 </script>

@@ -62,6 +62,8 @@
                     <a href="{{ route('op.jefe_ventas') }}" class="btn-view-brief" style="margin-right: 10px;">Panel Jefe de Ventas</a>
                 @elseif(session('user_role') === 'ventas')
                     <a href="{{ route('op.mis_ordenes') }}" class="btn-view-brief" style="margin-right: 10px;">Panel Mis Órdenes</a>
+                @elseif(session('user_role') === 'vista')
+                    <a href="{{ route('op.vista') }}" class="btn-view-brief" style="margin-right: 10px;">Panel Vista</a>
                 @endif
                 
                 <a href="{{ route('logout') }}" class="btn-logout">Cerrar Sesión</a>

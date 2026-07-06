@@ -9,14 +9,11 @@
     
     <!-- TV Header -->
     <div class="tv-header">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
-            <div style="display: flex; align-items: center; gap: 20px;">
-                <div class="logo-glass-wrapper tv-logo-wrapper" style="margin-bottom: 0;">
-                    <img class="tv-logo-img" src="/img/logo-btl.png" alt="BTL Logo">
-                </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
                 <div>
                     <h2 class="tv-title" style="margin: 0; line-height: 1;">BTL PRODUCCIÓN | <span style="color: var(--blue-bright);">BANDEJA DE TRABAJO</span></h2>
-                    <p class="tv-meta" style="margin-top: 5px;">Órdenes de producción priorizadas para pantalla operativa (Categoría: <span>{{ $categoria }}</span>)</p>
+                    <p class="tv-meta" style="margin-top: 3px; margin-bottom: 0;">Categoría: <span>{{ $categoria }}</span></p>
                 </div>
             </div>
             
@@ -419,11 +416,27 @@
         document.getElementById('detail-entregar-a').textContent = order.entregar_a;
         
         const briefDiv = document.getElementById('detail-brief');
-        if (order.brief) {
-            briefDiv.innerHTML = `<a href="${storageBaseUrl}/${order.brief}" target="_blank" class="btn-view-brief">Ver Plano</a>`;
+        let filesHtml = '';
+        if (order.archivos && order.archivos.length > 0) {
+            order.archivos.forEach((file) => {
+                const fileName = file.file_name || 'Archivo';
+                filesHtml += `
+                    <div style="margin-bottom: 5px; display: flex; align-items: center; gap: 6px;">
+                        <span style="color: var(--text-white); font-size: 0.8rem; word-break: break-all;">${fileName}</span>
+                        <a href="/op/descargar-archivo/${file.id}" target="_blank" class="btn-view-brief" style="background: rgba(0, 210, 255, 0.15); color: var(--blue-bright); border: 1px solid rgba(0, 210, 255, 0.3); padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; text-decoration: none; white-space: nowrap;">Descargar</a>
+                    </div>`;
+            });
+        } else if (order.brief) {
+            const fileName = order.brief.split('/').pop() || 'Plano';
+            filesHtml = `
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="color: var(--text-white); font-size: 0.8rem; word-break: break-all;">${fileName}</span>
+                    <a href="/op/descargar-brief/${order.id}" target="_blank" class="btn-view-brief" style="background: rgba(0, 210, 255, 0.15); color: var(--blue-bright); border: 1px solid rgba(0, 210, 255, 0.3); padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; text-decoration: none; white-space: nowrap;">Descargar</a>
+                </div>`;
         } else {
-            briefDiv.textContent = '-';
+            filesHtml = '-';
         }
+        briefDiv.innerHTML = filesHtml;
 
         const instSection = document.getElementById('detail-installation-section');
         if (order.entregar_a === 'Instaladores') {
@@ -655,12 +668,16 @@
         container.innerHTML = html;
     }
 
-    // Dynamic AJAX updates polling loop (runs every 8 seconds)
+    // Dynamic AJAX updates polling loop (runs every 5 seconds, prevents cache and overlap)
+    let isPolling = false;
     function pollUpdates() {
+        if (isPolling) return;
+        isPolling = true;
+
         const indicator = document.getElementById('updating-indicator');
         if (indicator) indicator.style.opacity = '1';
 
-        fetch(`/op/tv/updates?categoria={{ $categoria }}`, {
+        fetch(`/op/tv/updates?categoria={{ $categoria }}&_t=${Date.now()}`, {
             headers: {
                 'X-Requested-With': 'XMLHttpRequest',
                 'Accept': 'application/json'
@@ -721,11 +738,11 @@
             if (notify) {
                 updatedOrderIds = tempUpdatedIds;
 
-                // Reset highlighted classes after 7 seconds
+                // Reset highlighted classes after 4 seconds
                 setTimeout(() => {
                     updatedOrderIds = [];
                     renderTable(currentOrders);
-                }, 7000);
+                }, 4000);
             }
 
             if (data.recent_events) {
@@ -759,6 +776,7 @@
         })
         .catch(err => console.log("AJAX updates polling error:", err))
         .finally(() => {
+            isPolling = false;
             if (indicator) indicator.style.opacity = '0';
         });
     }
@@ -793,8 +811,8 @@
             selectOrder(parseInt(savedId));
         }
 
-        // Start polling updates every 8 seconds
-        setInterval(pollUpdates, 8000);
+        // Start polling updates every 10 seconds
+        setInterval(pollUpdates, 10000);
     });
 </script>
 @endsection

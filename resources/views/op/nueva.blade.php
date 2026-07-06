@@ -128,15 +128,20 @@
 
             <!-- Brief File Upload -->
             <div class="form-group">
-                <label for="brief">Subir Plano / Diseño *</label>
-                <input type="file" id="brief" name="brief" class="form-control" accept=".pdf,.ppt,.pptx,.zip,.jpg,.jpeg,.png,.ai,.psd,.xls,.xlsx,.csv">
+                <label for="brief">Subir Planos / Diseños *</label>
+                <input type="file" id="brief" name="brief[]" class="form-control" accept=".pdf,.ppt,.pptx,.zip,.jpg,.jpeg,.png,.gif,.svg,.webp,.ai,.psd,.xls,.xlsx,.csv,.doc,.docx" multiple>
                 <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 5px; line-height: 1.4;">
-                    Formatos permitidos: PDF, PPT, PPTX, ZIP, JPG, PNG, AI, PSD, XLS, XLSX, CSV <br>
-                    Tamaño máximo: 100 MB
+                    Formatos permitidos: PDF, Excel, Word, PowerPoint, ZIP, Imágenes (JPG, PNG, GIF, SVG, WEBP), Illustrator, Photoshop, CSV <br>
+                    Tamaño máximo: 100 MB por archivo
                 </p>
                 @error('brief')
-                    <span style="color: var(--priority-urgente); font-size: 0.8rem;">{{ $message }}</span>
+                    <span style="color: var(--priority-urgente); font-size: 0.8rem; display: block; margin-top: 5px;">{{ $message }}</span>
                 @enderror
+                @foreach ($errors->get('brief.*') as $messages)
+                    @foreach ($messages as $message)
+                        <span style="color: var(--priority-urgente); font-size: 0.8rem; display: block; margin-top: 5px;">{{ $message }}</span>
+                    @endforeach
+                @endforeach
             </div>
 
             <h3 style="font-size: 1.15rem; color: var(--blue-bright); margin-top: 30px; margin-bottom: 20px; border-bottom: 1px solid var(--border-glass); padding-bottom: 8px;">
@@ -237,28 +242,109 @@
         toggleInstallationFields();
         document.getElementById('entregar_a').addEventListener('change', toggleInstallationFields);
 
-        // Frontend validation for brief file upload size and format
+        // Frontend validation and accumulation for brief file upload (multiple files supported)
         const fileInput = document.getElementById('brief');
         if (fileInput) {
+            let selectedFiles = [];
+            
+            // Create a list container for selected files below the input
+            const fileListContainer = document.createElement('div');
+            fileListContainer.id = 'selected-files-list';
+            fileListContainer.style.marginTop = '10px';
+            fileListContainer.style.display = 'flex';
+            fileListContainer.style.flexDirection = 'column';
+            fileListContainer.style.gap = '8px';
+            fileInput.parentNode.appendChild(fileListContainer);
+
             fileInput.addEventListener('change', function() {
-                if (this.files && this.files[0]) {
-                    const file = this.files[0];
+                if (!this.files || this.files.length === 0) return;
+                
+                const newFiles = Array.from(this.files);
+                const validExtensions = ['pdf', 'ppt', 'pptx', 'zip', 'jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'ai', 'psd', 'xls', 'xlsx', 'csv', 'doc', 'docx'];
+
+                for (let file of newFiles) {
                     const fileSizeMB = file.size / (1024 * 1024);
-                    const validExtensions = ['pdf', 'ppt', 'pptx', 'zip', 'jpg', 'jpeg', 'png', 'ai', 'psd', 'xls', 'xlsx', 'csv'];
                     const extension = file.name.split('.').pop().toLowerCase();
- 
+                    
                     if (fileSizeMB > 100) {
-                        alert('El archivo supera el tamaño máximo permitido de 100 MB.');
-                        this.value = ''; // clear input
-                        return;
+                        alert(`El archivo "${file.name}" supera el tamaño máximo permitido de 100 MB.`);
+                        continue;
                     }
                     if (!validExtensions.includes(extension)) {
-                        alert('El formato del archivo no está permitido. Formatos válidos: PDF, PPT, PPTX, ZIP, JPG, PNG, AI, PSD, XLS, XLSX, CSV');
-                        this.value = ''; // clear input
-                        return;
+                        alert(`El formato del archivo "${file.name}" no está permitido. Formatos válidos: PDF, Excel, Word, PowerPoint, ZIP, Imágenes, Illustrator, Photoshop, CSV`);
+                        continue;
+                    }
+
+                    // Avoid duplicates
+                    const alreadyExists = selectedFiles.some(f => f.name === file.name && f.size === file.size);
+                    if (!alreadyExists) {
+                        selectedFiles.push(file);
                     }
                 }
+                
+                // Clear value to allow selecting same file again
+                this.value = '';
+                
+                updateFileInputAndList();
             });
+
+            function updateFileInputAndList() {
+                fileListContainer.innerHTML = '';
+                
+                selectedFiles.forEach((file, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'selected-file-item';
+                    item.style.display = 'flex';
+                    item.style.justifyContent = 'space-between';
+                    item.style.alignItems = 'center';
+                    item.style.background = 'rgba(255, 255, 255, 0.05)';
+                    item.style.border = '1px solid var(--border-glass)';
+                    item.style.padding = '8px 12px';
+                    item.style.borderRadius = '6px';
+                    item.style.fontSize = '0.85rem';
+                    item.style.color = 'var(--text-white)';
+                    
+                    const nameSpan = document.createElement('span');
+                    nameSpan.textContent = `📎 ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`;
+                    nameSpan.style.wordBreak = 'break-all';
+                    nameSpan.style.marginRight = '10px';
+                    
+                    const removeBtn = document.createElement('button');
+                    removeBtn.type = 'button';
+                    removeBtn.innerHTML = '✕ Quitar';
+                    removeBtn.style.background = 'rgba(255, 51, 102, 0.15)';
+                    removeBtn.style.color = '#ff3366';
+                    removeBtn.style.border = '1px solid rgba(255, 51, 102, 0.3)';
+                    removeBtn.style.padding = '4px 10px';
+                    removeBtn.style.borderRadius = '4px';
+                    removeBtn.style.cursor = 'pointer';
+                    removeBtn.style.fontSize = '0.75rem';
+                    removeBtn.style.fontWeight = 'bold';
+                    removeBtn.style.whiteSpace = 'nowrap';
+                    removeBtn.addEventListener('click', () => {
+                        selectedFiles.splice(index, 1);
+                        updateFileInputAndList();
+                    });
+                    
+                    item.appendChild(nameSpan);
+                    item.appendChild(removeBtn);
+                    fileListContainer.appendChild(item);
+                });
+            }
+
+            // Sync with DataTransfer ONLY on form submit to prevent browser event loop conflicts
+            const form = fileInput.closest('form');
+            if (form) {
+                form.addEventListener('submit', function() {
+                    if (selectedFiles.length > 0) {
+                        const dataTransfer = new DataTransfer();
+                        selectedFiles.forEach(file => {
+                            dataTransfer.items.add(file);
+                        });
+                        fileInput.files = dataTransfer.files;
+                    }
+                });
+            }
         }
     });
 </script>

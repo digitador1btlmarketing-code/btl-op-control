@@ -3,10 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Carbon\Carbon;
 
 class OrdenProduccion extends Model
 {
+    use SoftDeletes;
+
     protected $table = 'orden_produccions';
 
     protected $fillable = [
@@ -31,6 +34,8 @@ class OrdenProduccion extends Model
         'creado_por_codigo',
         'creado_por_nombre',
         'creado_por_rol',
+        'reproceso_de_id',
+        'parent_op_id',
     ];
 
     protected $attributes = [
@@ -156,4 +161,53 @@ class OrdenProduccion extends Model
     {
         return $this->hasOne(SolicitudCambioFecha::class, 'orden_produccion_id')->where('estado_solicitud', 'Pendiente');
     }
+
+    /**
+     * Get the files attached to this production order.
+     */
+    public function archivos()
+    {
+        return $this->hasMany(OrdenProduccionArchivo::class, 'orden_produccion_id');
+    }
+
+    /**
+     * Get the reprocesos generated from this order.
+     */
+    public function reprocesos()
+    {
+        return $this->hasMany(OrdenProduccion::class, 'reproceso_de_id');
+    }
+
+    /**
+     * Get the original order this reproceso was created from.
+     */
+    public function original()
+    {
+        return $this->belongsTo(OrdenProduccion::class, 'reproceso_de_id');
+    }
+
+    /**
+     * Get the parent order this reproceso was created from (alias).
+     */
+    public function parent()
+    {
+        return $this->belongsTo(OrdenProduccion::class, 'parent_op_id');
+    }
+
+    /**
+     * Get the reproceso requests.
+     */
+    public function solicitudesReproceso()
+    {
+        return $this->hasMany(SolicitudReproceso::class, 'orden_produccion_id');
+    }
+
+    /**
+     * Get the active pending reproceso request.
+     */
+    public function solicitudReprocesoPendiente()
+    {
+        return $this->hasOne(SolicitudReproceso::class, 'orden_produccion_id')->where('estado', 'Pendiente');
+    }
 }
+

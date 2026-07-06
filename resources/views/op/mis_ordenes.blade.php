@@ -96,11 +96,106 @@
 
 <!-- Main Table -->
 <div class="card">
+    <style>
+        .category-tabs-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border-glass);
+            position: relative;
+        }
+        .category-tab {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            font-weight: 600;
+            padding: 10px 16px;
+            cursor: pointer;
+            position: relative;
+            transition: var(--transition);
+            margin-bottom: -1px; /* overlap the border */
+        }
+        .category-tab:hover {
+            color: var(--text-white);
+        }
+        .category-tab.active {
+            color: var(--blue-bright);
+            font-weight: 700;
+        }
+        .category-tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: var(--blue-bright);
+            box-shadow: 0 0 8px var(--blue-bright);
+        }
+        .admin-row {
+            cursor: pointer;
+        }
+        .admin-row:hover {
+            background: rgba(0, 210, 255, 0.04) !important;
+        }
+        .admin-row.active {
+            background: rgba(0, 210, 255, 0.08) !important;
+        }
+    </style>
+
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
+        <h3 style="font-size: 1.25rem; font-weight: 800; margin: 0;">
+            Mis Órdenes de Producción
+        </h3>
+        
+        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+            <!-- Search by OP number -->
+            <div style="position: relative; min-width: 220px;">
+                <input 
+                    type="text" 
+                    id="search-op" 
+                    placeholder="Buscar por número OP..." 
+                    class="form-control" 
+                    style="padding: 8px 12px; font-size: 0.9rem; height: 38px; width: 100%;"
+                    oninput="applyVendedorFilters()"
+                >
+            </div>
+            
+            <!-- Filter by Status -->
+            <div style="min-width: 180px;">
+                <select 
+                    id="filter-status" 
+                    class="form-control" 
+                    style="padding: 8px 12px; font-size: 0.9rem; height: 38px; cursor: pointer; width: 100%;"
+                    onchange="applyVendedorFilters()"
+                >
+                    <option value="activas" selected>Todas activas</option>
+                    <option value="Pendiente">Pendientes</option>
+                    <option value="En proceso">En proceso</option>
+                    <option value="En espera">En espera</option>
+                    <option value="Terminado">Terminadas</option>
+                    <option value="Cancelado">Canceladas</option>
+                    <option value="todos">Todas</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Tabs -->
+    <div class="category-tabs-container">
+        <button class="category-tab active" data-category="todos" onclick="selectCategoryTab('todos')">Todas</button>
+        <button class="category-tab" data-category="Branding" onclick="selectCategoryTab('Branding')">Branding</button>
+        <button class="category-tab" data-category="Promocional" onclick="selectCategoryTab('Promocional')">Promocional</button>
+        <button class="category-tab" data-category="Reprocesos" onclick="selectCategoryTab('Reprocesos')">Reprocesos</button>
+    </div>
+
     <div style="overflow-x: auto;">
         <table class="table-tv" style="width: 100%; border-collapse: collapse; text-align: left;">
             <thead>
                 <tr>
                     <th>Ticket OP</th>
+                    <th>Categoría</th>
                     <th>Cliente</th>
                     <th>Marca</th>
                     <th>Estado</th>
@@ -120,7 +215,12 @@
                                               ($orden->estado === 'Cancelado' ? 'progress-fill-cancelado' :
                                               ($orden->estado === 'En espera' ? 'progress-fill-en-espera' : 'progress-fill-terminado')));
                     @endphp
-                    <tr class="admin-row" id="row-{{ $orden->id }}" onclick="selectOrder({{ $orden->id }})">
+                    <tr class="admin-row" id="row-{{ $orden->id }}" onclick="selectOrder({{ $orden->id }})"
+                        data-id="{{ $orden->id }}"
+                        data-estado="{{ $orden->estado }}"
+                        data-prioridad="{{ $orden->prioridad }}"
+                        data-numero-op="{{ $orden->numero_op }}"
+                        data-categoria="{{ $orden->categoria }}">
                         <td>
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <strong style="color: var(--text-white);">{{ $orden->numero_op }}</strong>
@@ -128,6 +228,15 @@
                                     <span class="fire-flame">🔥</span>
                                 </span>
                             </div>
+                        </td>
+                        <td>
+                            @php
+                                $badgeCategoryClass = $orden->categoria === 'Branding' ? 'badge-normal' : 
+                                                      ($orden->categoria === 'Promocional' ? 'badge-proxima' : '');
+                            @endphp
+                            <span class="badge {{ $badgeCategoryClass }}" style="{{ $orden->categoria === 'Reprocesos' ? 'background: rgba(255, 95, 56, 0.15); color: #ff5f38; border: 1px solid rgba(255, 95, 56, 0.3);' : '' }}">
+                                {{ $orden->categoria === 'Reprocesos' ? 'REPROCESO' : $orden->categoria }}
+                            </span>
                         </td>
                         <td>{{ $orden->cliente }}</td>
                         <td>{{ $orden->marca }}</td>
@@ -180,7 +289,7 @@
                     </tr>
                 @empty
                     <tr id="empty-row">
-                        <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 40px;">
+                        <td colspan="9" style="text-align: center; color: var(--text-muted); padding: 40px;">
                             No tiene órdenes de producción registradas.
                         </td>
                     </tr>
@@ -266,6 +375,14 @@
                 <div id="detail-fecha-desinst" class="detail-val">-</div>
             </div>
         </div>
+    </div>
+
+    <!-- Reproceso request block and history -->
+    <div id="reproceso-action-container" style="margin-top: 15px;"></div>
+
+    <div id="detail-reprocesos-section" style="margin-top: 15px; border-top: 1px solid var(--border-glass); padding-top: 15px;">
+        <h4 style="font-size: 1.05rem; color: var(--priority-proxima); margin-bottom: 10px; font-weight: 700;">🔄 Historial de Reprocesos</h4>
+        <div id="detail-reprocesos-content">-</div>
     </div>
 
     <!-- Date change status view in details -->
@@ -381,6 +498,52 @@
     </div>
 </div>
 
+<!-- Solicitar Reproceso Modal -->
+<div id="request-reproceso-modal" class="custom-modal-overlay hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-modal-overlay); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 10000; transition: var(--transition);">
+    <div class="card" style="max-width: 520px; width: 90%; border-color: rgba(255, 95, 56, 0.4); box-shadow: var(--card-shadow); padding: 30px; margin-bottom: 0;">
+        <h3 style="font-size: 1.3rem; font-weight: 800; color: #ff5f38; margin-top: 0; margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
+            🔄 Solicitar Reproceso
+        </h3>
+        
+        <form id="request-reproceso-form" onsubmit="submitReprocesoRequest(event)" enctype="multipart/form-data">
+            @csrf
+            <input type="hidden" name="orden_id" id="reproceso-orden-id">
+            
+            <div class="form-group" style="text-align: left; margin-bottom: 15px;">
+                <label for="reproceso-motivo">Motivo *</label>
+                <select name="motivo" id="reproceso-motivo" required style="width: 100%;">
+                    <option value="" disabled selected>Seleccione un motivo</option>
+                    <option value="Error de diseño">Error de diseño</option>
+                    <option value="Error de producción">Error de producción</option>
+                    <option value="Daño en transporte">Daño en transporte</option>
+                    <option value="Solicitud del cliente">Solicitud del cliente</option>
+                    <option value="Otro">Otro</option>
+                </select>
+            </div>
+
+            <div class="form-group" style="text-align: left; margin-bottom: 15px;">
+                <label for="reproceso-descripcion">Descripción detallada *</label>
+                <textarea name="descripcion" id="reproceso-descripcion" class="form-control" rows="3" required placeholder="Describa el problema detalladamente..." style="resize: none;"></textarea>
+            </div>
+
+            <div class="form-group" style="text-align: left; margin-bottom: 15px;">
+                <label for="reproceso-fecha">Fecha requerida (Opcional)</label>
+                <input type="date" name="fecha_requerida" id="reproceso-fecha" class="form-control">
+            </div>
+
+            <div class="form-group" style="text-align: left; margin-bottom: 20px;">
+                <label for="reproceso-archivo">Archivo adjunto (Opcional)</label>
+                <input type="file" name="archivo" id="reproceso-archivo" class="form-control" style="padding: 6px;">
+            </div>
+            
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button type="button" onclick="closeRequestReprocesoModal()" class="filter-btn" style="padding: 10px 20px; width: auto; font-weight: 600;">Cancelar</button>
+                <button type="submit" class="btn-primary" style="background: #ff5f38; border-color: #ff5f38; width: auto; padding: 10px 25px; font-weight: 700;">Enviar Solicitud</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 @endsection
 
 @section('scripts')
@@ -388,6 +551,7 @@
     const loggedInUserCode = "{{ session('user_code') }}";
     const loggedInUserRole = "{{ session('user_role') }}";
     let selectedOrderId = null;
+    let activeCategory = 'todos';
     let allOrders = @json($ordenes);
     const storageBaseUrl = "/storage";
 
@@ -426,6 +590,87 @@
         if (panel) panel.classList.add('hidden');
     }
 
+    function selectCategoryTab(category) {
+        activeCategory = category;
+        
+        // Update active class on tab buttons
+        document.querySelectorAll('.category-tab').forEach(tab => {
+            if (tab.getAttribute('data-category') === category) {
+                tab.classList.add('active');
+            } else {
+                tab.classList.remove('active');
+            }
+        });
+        
+        applyVendedorFilters();
+    }
+
+    function applyVendedorFilters() {
+        const searchVal = document.getElementById('search-op').value.toLowerCase().trim();
+        const filterVal = document.getElementById('filter-status').value;
+        const rows = document.querySelectorAll('.admin-row');
+        
+        let visibleCount = 0;
+
+        rows.forEach(row => {
+            if (row.id === 'empty-row' || row.id === 'no-results-row') return;
+            const estado = row.getAttribute('data-estado');
+            const numeroOp = row.getAttribute('data-numero-op').toLowerCase();
+            const categoria = row.getAttribute('data-categoria');
+
+            // Category filter logic
+            let matchesCategory = true;
+            if (activeCategory !== 'todos') {
+                if (activeCategory === 'Reprocesos') {
+                    matchesCategory = (categoria === 'Reprocesos' || categoria === 'Reproceso' || categoria === 'REPROCESO');
+                } else {
+                    matchesCategory = (categoria === activeCategory);
+                }
+            }
+
+            // Status filter logic
+            let matchesFilter = false;
+            if (filterVal === 'activas') {
+                matchesFilter = (estado === 'Pendiente' || estado === 'En proceso' || estado === 'En espera');
+            } else if (filterVal === 'todos') {
+                matchesFilter = true;
+            } else {
+                matchesFilter = (estado === filterVal);
+            }
+
+            // Search by OP number logic
+            let matchesSearch = true;
+            if (searchVal) {
+                matchesSearch = numeroOp.includes(searchVal);
+            }
+
+            if (matchesCategory && matchesFilter && matchesSearch) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        // Toggle empty message row
+        if (rows.length > 0) {
+            const noResults = document.getElementById('no-results-row');
+            if (visibleCount === 0) {
+                if (!noResults) {
+                    const tbody = document.querySelector('tbody');
+                    if (tbody) {
+                        const tr = document.createElement('tr');
+                        tr.id = 'no-results-row';
+                        tr.innerHTML = `<td colspan="9" style="text-align: center; color: var(--text-muted); padding: 40px;">No se encontraron órdenes con los filtros seleccionados.</td>`;
+                        tbody.appendChild(tr);
+                    }
+                }
+            } else {
+                if (noResults) noResults.remove();
+            }
+        }
+    }
+
     function populateDetail(order) {
         document.getElementById('detail-op-title').textContent = order.numero_op;
         document.getElementById('detail-op').textContent = order.numero_op;
@@ -458,11 +703,27 @@
         document.getElementById('detail-entregar-a').textContent = order.entregar_a;
         
         const briefDiv = document.getElementById('detail-brief');
-        if (order.brief) {
-            briefDiv.innerHTML = `<a href="/op/descargar-brief/${order.id}" target="_blank" class="btn-view-brief" style="background: rgba(0, 210, 255, 0.15); color: var(--blue-bright); border: 1px solid rgba(0, 210, 255, 0.3); padding: 4px 10px; border-radius: 6px; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 5px;">Ver Plano</a>`;
+        let filesHtml = '';
+        if (order.archivos && order.archivos.length > 0) {
+            order.archivos.forEach((file) => {
+                const fileName = file.file_name || 'Archivo';
+                filesHtml += `
+                    <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: var(--text-white); font-size: 0.9rem; word-break: break-all;">${fileName}</span>
+                        <a href="/op/descargar-archivo/${file.id}" target="_blank" class="btn-view-brief" style="background: rgba(0, 210, 255, 0.15); color: var(--blue-bright); border: 1px solid rgba(0, 210, 255, 0.3); padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; text-decoration: none; white-space: nowrap;">Descargar</a>
+                    </div>`;
+            });
+        } else if (order.brief) {
+            const fileName = order.brief.split('/').pop() || 'Plano';
+            filesHtml = `
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="color: var(--text-white); font-size: 0.9rem; word-break: break-all;">${fileName}</span>
+                    <a href="/op/descargar-brief/${order.id}" target="_blank" class="btn-view-brief" style="background: rgba(0, 210, 255, 0.15); color: var(--blue-bright); border: 1px solid rgba(0, 210, 255, 0.3); padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; text-decoration: none; white-space: nowrap;">Descargar</a>
+                </div>`;
         } else {
-            briefDiv.textContent = '-';
+            filesHtml = '-';
         }
+        briefDiv.innerHTML = filesHtml;
 
         const pdfBtn = document.getElementById('btn-download-pdf-op');
         if (pdfBtn) {
@@ -555,7 +816,106 @@
             if (btnChange) btnChange.style.display = 'inline-block';
         }
 
-        // History is loaded inside the collapsible History modal on demand
+        // Reprocesos request block and history
+        const actionContainer = document.getElementById('reproceso-action-container');
+        if (actionContainer) {
+            actionContainer.innerHTML = '';
+            if (order.estado === 'Terminado') {
+                const pendingReproceso = order.solicitudes_reproceso ? order.solicitudes_reproceso.find(s => s.estado === 'Pendiente') : null;
+                const hasActiveReproceso = order.reprocesos && order.reprocesos.some(r => r.estado !== 'Cancelado');
+                
+                if (pendingReproceso) {
+                    let attachmentHtml = '';
+                    if (pendingReproceso.archivo_adjunto) {
+                        attachmentHtml = `<br><strong>Adjunto:</strong> <a href="/storage/${pendingReproceso.archivo_adjunto}" target="_blank" style="color: var(--blue-bright); text-decoration: underline;">Descargar archivo</a>`;
+                    }
+                    let reqDateStr = 'Sin especificar';
+                    if (pendingReproceso.fecha_requerida) {
+                        reqDateStr = pendingReproceso.fecha_requerida.split('-').reverse().join('/');
+                    }
+                    actionContainer.innerHTML = `
+                        <div style="background: rgba(255, 95, 56, 0.08); border: 1px solid rgba(255, 95, 56, 0.2); padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 0.85rem; line-height: 1.4; text-align: left;">
+                            <strong style="color: #ff5f38; display: block; margin-bottom: 5px;">⏳ Solicitud de Reproceso Pendiente</strong>
+                            <strong>Solicitado por:</strong> ${pendingReproceso.solicitado_por_nombre || 'Desconocido'}<br>
+                            <strong>Motivo:</strong> ${pendingReproceso.motivo || '-'}<br>
+                            <strong>Descripción:</strong> <span style="font-style: italic;">"${pendingReproceso.descripcion || '-'}"</span><br>
+                            <strong>Fecha requerida:</strong> ${reqDateStr}
+                            ${attachmentHtml}
+                        </div>
+                    `;
+                } else if (hasActiveReproceso) {
+                    const rep = order.reprocesos.find(r => r.estado !== 'Cancelado');
+                    actionContainer.innerHTML = `<span class="badge badge-proceso" style="padding: 6px 12px; font-size: 0.85rem; display: inline-block;">🔄 Ya existe un reproceso activo: <strong>${rep.numero_op}</strong></span>`;
+                } else {
+                    const userRole = '{{ session("user_role") }}';
+                    if (userRole === 'ventas' || userRole === 'jefe_ventas') {
+                        actionContainer.innerHTML = `<button onclick="openRequestReprocesoModal(${order.id})" class="btn-save-inline" style="background: rgba(255, 95, 56, 0.15); color: #ff5f38; border: 1px solid rgba(255, 95, 56, 0.3); padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.85rem;">🔄 Solicitar Reproceso</button>`;
+                    }
+                }
+            }
+        }
+
+        const reprocesosDiv = document.getElementById('detail-reprocesos-content');
+        if (reprocesosDiv) {
+            if (order.reprocesos && order.reprocesos.length > 0) {
+                let html = '<table style="width:100%; font-size:0.85rem; border-collapse:collapse; text-align:left;">';
+                html += '<thead><tr style="border-bottom:1px solid var(--border-glass);"><th style="padding:4px;">Código OP</th><th style="padding:4px;">Estado</th><th style="padding:4px;">Líder</th></tr></thead><tbody>';
+                order.reprocesos.forEach(rep => {
+                    let badgeClass = 'badge-pendiente';
+                    if (rep.estado === 'En proceso') badgeClass = 'badge-proceso';
+                    if (rep.estado === 'Terminado') badgeClass = 'badge-terminado';
+                    if (rep.estado === 'Cancelado') badgeClass = 'badge-cancelado';
+                    if (rep.estado === 'En espera') badgeClass = 'badge-en-espera';
+                    html += `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);"><td style="padding:6px 4px;"><strong>${rep.numero_op}</strong></td><td style="padding:6px 4px;"><span class="badge ${badgeClass}">${rep.estado}</span></td><td style="padding:6px 4px;">${rep.lider_produccion || '<em>Sin asignar</em>'}</td></tr>`;
+                });
+                html += '</tbody></table>';
+                reprocesosDiv.innerHTML = html;
+            } else {
+                reprocesosDiv.innerHTML = '<span style="color: var(--text-muted); font-style: italic;">Sin reprocesos</span>';
+            }
+        }
+    }
+
+    function openRequestReprocesoModal(id) {
+        document.getElementById('reproceso-orden-id').value = id;
+        document.getElementById('request-reproceso-form').reset();
+        document.getElementById('request-reproceso-modal').classList.remove('hidden');
+    }
+
+    function closeRequestReprocesoModal() {
+        document.getElementById('request-reproceso-modal').classList.add('hidden');
+    }
+
+    function submitReprocesoRequest(event) {
+        event.preventDefault();
+        const id = document.getElementById('reproceso-orden-id').value;
+        const form = document.getElementById('request-reproceso-form');
+        const formData = new FormData(form);
+
+        fetch(`/op/solicitar-reproceso/${id}`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
+        })
+        .then(res => res.json())
+        .then(data => {
+            closeRequestReprocesoModal();
+            if (data.success) {
+                showToast(data.message, 'success');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showToast(data.message, 'error');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            closeRequestReprocesoModal();
+            showToast('Error de red al enviar la solicitud.', 'error');
+        });
     }
 
     // Polling updates for vendedor panel
@@ -603,6 +963,12 @@
                     tbody.appendChild(row);
                 }
 
+                row.setAttribute('data-id', orden.id);
+                row.setAttribute('data-estado', orden.estado);
+                row.setAttribute('data-prioridad', orden.prioridad || '');
+                row.setAttribute('data-numero-op', orden.numero_op);
+                row.setAttribute('data-categoria', orden.categoria);
+
                 // Update columns
                 let formattedDate = '-';
                 let formattedTime = '-';
@@ -631,6 +997,12 @@
                     requestBadge = '<span class="badge badge-pendiente">Pendiente de aprobación</span>';
                 }
 
+                let badgeCategoryClass = orden.categoria === 'Branding' ? 'badge-normal' : 
+                                      (orden.categoria === 'Promocional' ? 'badge-proxima' : '');
+                let catText = (orden.categoria === 'Reprocesos' || orden.categoria === 'Reproceso' || orden.categoria === 'REPROCESO') ? 'REPROCESO' : orden.categoria;
+                let catStyle = (orden.categoria === 'Reprocesos' || orden.categoria === 'Reproceso' || orden.categoria === 'REPROCESO') ? 'background: rgba(255, 95, 56, 0.15); color: #ff5f38; border: 1px solid rgba(255, 95, 56, 0.3);' : '';
+                let catBadge = `<span class="badge ${badgeCategoryClass}" style="${catStyle}">${catText}</span>`;
+
                 row.innerHTML = `
                     <td>
                         <div style="display: flex; align-items: center; gap: 8px;">
@@ -640,6 +1012,7 @@
                             </span>
                         </div>
                     </td>
+                    <td>${catBadge}</td>
                     <td>${orden.cliente}</td>
                     <td>${orden.marca}</td>
                     <td>
@@ -682,6 +1055,7 @@
             document.getElementById('kpi-terminadas').textContent = terminadas;
 
             allOrders = newOrders;
+            applyVendedorFilters();
 
             // Sync solicitudes container
             if (data.solicitudes) {
@@ -762,8 +1136,8 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-        // Start polling updates every 10 seconds
-        setInterval(pollVendedorUpdates, 10000);
+        // Start polling updates every 15 seconds
+        setInterval(pollVendedorUpdates, 15000);
     });
     // Modal: Collapsible History functions
     function openHistoryModal() {

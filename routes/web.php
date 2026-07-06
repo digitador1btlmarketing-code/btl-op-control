@@ -21,12 +21,16 @@ Route::middleware('access:admin,admin_branding,admin_promo')->group(function () 
     Route::get('/op/admin', [OrdenProduccionController::class, 'admin'])->name('op.admin');
     Route::get('/op/admin/updates', [OrdenProduccionController::class, 'adminUpdates'])->name('op.admin.updates');
     Route::post('/op/admin/update/{id}', [OrdenProduccionController::class, 'updateQuick'])->name('op.update');
+    Route::post('/admin/reproceso/aprobar/{id}', [OrdenProduccionController::class, 'aprobarReproceso'])->name('admin.reproceso.aprobar');
+    Route::post('/admin/reproceso/rechazar/{id}', [OrdenProduccionController::class, 'rechazarReproceso'])->name('admin.reproceso.rechazar');
+    Route::post('/op/eliminar/{id}', [OrdenProduccionController::class, 'eliminarOP'])->name('op.eliminar');
 });
 
 Route::middleware('access:admin,admin_branding,admin_promo,jefe_ventas,ventas')->group(function () {
     Route::post('/op/solicitar-cambio-fecha', [OrdenProduccionController::class, 'solicitarCambioFecha'])->name('op.solicitar_cambio_fecha');
     Route::post('/jefe/cambio-fecha/aprobar/{id}', [OrdenProduccionController::class, 'aprobarCambioFecha'])->name('jefe.cambio_fecha.aprobar');
     Route::post('/jefe/cambio-fecha/rechazar/{id}', [OrdenProduccionController::class, 'rechazarCambioFecha'])->name('jefe.cambio_fecha.rechazar');
+    Route::post('/op/solicitar-reproceso/{id}', [OrdenProduccionController::class, 'solicitarReproceso'])->name('op.solicitar_reproceso');
 });
 
 Route::middleware('access:admin')->group(function () {
@@ -51,8 +55,14 @@ Route::middleware('access:ventas')->group(function () {
     Route::get('/op/mis-ordenes/updates', [OrdenProduccionController::class, 'misOrdenesUpdates'])->name('op.mis_ordenes.updates');
 });
 
+// Vista routes
+Route::middleware('access:vista')->group(function () {
+    Route::get('/op/vista', [OrdenProduccionController::class, 'vistaPanel'])->name('op.vista');
+    Route::get('/op/vista/updates', [OrdenProduccionController::class, 'vistaUpdates'])->name('op.vista.updates');
+});
+
 // History log route (shared by all roles)
-Route::middleware('access:admin,admin_branding,admin_promo,jefe_ventas,ventas')->group(function () {
+Route::middleware('access:admin,admin_branding,admin_promo,jefe_ventas,ventas,vista')->group(function () {
     Route::get('/op/historial/{id}', [OrdenProduccionController::class, 'obtenerHistorial'])->name('op.historial');
 });
 
@@ -62,9 +72,10 @@ Route::middleware('access:admin,admin_branding,admin_promo,jefe_ventas')->group(
     Route::get('/op/exportar/pdf', [OrdenProduccionController::class, 'exportarPDF'])->name('op.exportar.pdf');
 });
 
-Route::middleware('access:admin,admin_branding,admin_promo,jefe_ventas,ventas')->group(function () {
+Route::middleware('access:admin,admin_branding,admin_promo,jefe_ventas,ventas,vista')->group(function () {
     Route::get('/op/exportar/detalle/{id}', [OrdenProduccionController::class, 'exportarDetallePDF'])->name('op.exportar.detalle');
     Route::get('/op/descargar-brief/{id}', [OrdenProduccionController::class, 'descargarBrief'])->name('op.descargar_brief');
+    Route::get('/op/descargar-archivo/{id}', [OrdenProduccionController::class, 'descargarArchivo'])->name('op.descargar_archivo');
 });
 
 Route::middleware('access:tv_branding,tv_promocional,admin,admin_branding,admin_promo')->group(function () {
