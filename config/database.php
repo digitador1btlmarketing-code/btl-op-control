@@ -4,19 +4,10 @@ use Illuminate\Support\Str;
 use Pdo\Mysql;
 
 $dbUrl = env('DATABASE_URL');
-$dbParams = [];
-if ($dbUrl) {
-    $parsedUrl = parse_url($dbUrl);
-    if ($parsedUrl) {
-        $dbParams = [
-            'host' => $parsedUrl['host'] ?? null,
-            'port' => $parsedUrl['port'] ?? null,
-            'database' => isset($parsedUrl['path']) ? ltrim($parsedUrl['path'], '/') : null,
-            'username' => $parsedUrl['user'] ?? null,
-            'password' => $parsedUrl['pass'] ?? null,
-        ];
-    }
+if (env('APP_ENV') === 'production' && empty($dbUrl)) {
+    throw new \Exception('DATABASE_URL is not set in production environment.');
 }
+$url = $dbUrl ? parse_url($dbUrl) : [];
 
 return [
 
@@ -101,12 +92,11 @@ return [
 
         'pgsql' => [
             'driver' => 'pgsql',
-            'url' => env('DATABASE_URL'),
-            'host' => $dbParams['host'] ?? '127.0.0.1',
-            'port' => $dbParams['port'] ?? '5432',
-            'database' => $dbParams['database'] ?? 'forge',
-            'username' => $dbParams['username'] ?? 'forge',
-            'password' => $dbParams['password'] ?? '',
+            'host' => $url['host'] ?? env('DB_HOST'),
+            'port' => $url['port'] ?? env('DB_PORT', 5432),
+            'database' => isset($url['path']) ? ltrim($url['path'], '/') : env('DB_DATABASE'),
+            'username' => $url['user'] ?? env('DB_USERNAME'),
+            'password' => $url['pass'] ?? env('DB_PASSWORD'),
             'charset' => 'utf8',
             'prefix' => '',
             'prefix_indexes' => true,
