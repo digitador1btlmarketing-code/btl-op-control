@@ -131,11 +131,17 @@ class OrdenProduccion extends Model
 
     /**
      * Get the code of the creator's jefe.
+     * Uses a per-request static cache to avoid N+1 queries on listing pages.
      */
     public function getCreadoPorJefeCodigoAttribute()
     {
-        $creator = \App\Models\UsuarioAcceso::where('codigo', $this->creado_por_codigo)->first();
-        return $creator ? $creator->jefe_codigo : null;
+        static $codigoToJefe = null;
+        if ($codigoToJefe === null) {
+            $codigoToJefe = \App\Models\UsuarioAcceso::whereNotNull('jefe_codigo')
+                ->pluck('jefe_codigo', 'codigo')
+                ->all();
+        }
+        return $codigoToJefe[$this->creado_por_codigo] ?? null;
     }
 
     /**

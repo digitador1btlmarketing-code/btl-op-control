@@ -918,15 +918,27 @@
         });
     }
 
-    // Polling updates for vendedor panel
+    // Polling updates for vendedor panel (with in-flight guard and backoff)
+    let isPollingVendedor = false;
+    let vendedorPollTimer = null;
+    let vendedorErrorBackoff = 15000;
+
+    function scheduleVendedorPoll(delay) {
+        clearTimeout(vendedorPollTimer);
+        vendedorPollTimer = setTimeout(pollVendedorUpdates, delay);
+    }
+
     function pollVendedorUpdates() {
+        if (isPollingVendedor) return;
+        isPollingVendedor = true;
+
         fetch('/op/mis-ordenes/updates', {
             headers: {
                 'X-Requested-With': 'XMLHttpRequest',
                 'Accept': 'application/json'
             }
         })
-        .then(res => res.json())
+        .then(res => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
         .then(data => {
             const newOrders = data.ordenes;
             
@@ -1132,12 +1144,20 @@
                 processRecentEvents(data.recent_events);
             }
         })
-        .catch(err => console.log("AJAX updates polling error:", err));
+        .catch(err => {
+            console.log("AJAX updates polling error:", err);
+            vendedorErrorBackoff = Math.min(vendedorErrorBackoff * 2, 60000);
+        })
+        .finally(() => {
+            isPollingVendedor = false;
+            scheduleVendedorPoll(vendedorErrorBackoff === 15000 ? 15000 : vendedorErrorBackoff);
+            if (vendedorErrorBackoff !== 15000) vendedorErrorBackoff = 15000;
+        });
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-        // Start polling updates every 15 seconds
-        setInterval(pollVendedorUpdates, 15000);
+        // Start polling updates every 15 seconds with in-flight guard
+        scheduleVendedorPoll(15000);
     });
     // Modal: Collapsible History functions
     function openHistoryModal() {

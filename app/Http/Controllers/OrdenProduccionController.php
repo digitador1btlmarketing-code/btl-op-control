@@ -347,7 +347,7 @@ class OrdenProduccionController extends Controller
     public function tvUpdates(Request $request)
     {
         $categoria = $request->query('categoria', 'Branding');
-        $ordenesRaw = OrdenProduccion::with('archivos')
+        $ordenesRaw = OrdenProduccion::with([])
             ->where(function($q) use ($categoria) {
                 $q->where('categoria', $categoria)
                   ->orWhere(function($sub) use ($categoria) {
@@ -387,7 +387,7 @@ class OrdenProduccionController extends Controller
     public function adminUpdates()
     {
         $userRole = session('user_role');
-        $query = OrdenProduccion::with(['solicitudPendiente', 'archivos', 'reprocesos', 'solicitudesReproceso']);
+        $query = OrdenProduccion::with(['solicitudPendiente', 'reprocesos', 'solicitudesReproceso']);
 
         if ($userRole === 'admin_branding') {
             $query->where(function ($q) {
@@ -557,7 +557,7 @@ class OrdenProduccionController extends Controller
     public function misOrdenesUpdates()
     {
         $vendedorCodigo = session('user_code');
-        $ordenes = OrdenProduccion::with(['archivos', 'reprocesos', 'solicitudesReproceso'])
+        $ordenes = OrdenProduccion::with(['reprocesos', 'solicitudesReproceso'])
             ->where(function($q) use ($vendedorCodigo) {
                 $q->where('creado_por_codigo', $vendedorCodigo)
                   ->orWhere(function($sub) use ($vendedorCodigo) {
@@ -661,7 +661,7 @@ class OrdenProduccionController extends Controller
     {
         $jefeCodigo = session('user_code');
 
-        $ordenes = OrdenProduccion::with(['archivos', 'reprocesos', 'solicitudesReproceso'])->where(function ($query) use ($jefeCodigo) {
+        $ordenes = OrdenProduccion::with(['reprocesos', 'solicitudesReproceso'])->where(function ($query) use ($jefeCodigo) {
             $query->where(function ($q) use ($jefeCodigo) {
                 $q->whereIn('creado_por_codigo', function ($sub) use ($jefeCodigo) {
                     $sub->select('codigo')

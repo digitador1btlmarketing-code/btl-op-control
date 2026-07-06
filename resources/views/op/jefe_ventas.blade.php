@@ -1127,15 +1127,27 @@
         });
     }
 
-    // Updates polling
+    // Updates polling (with in-flight guard and backoff)
+    let isPollingJefe = false;
+    let jefePollTimer = null;
+    let jefeErrorBackoff = 15000;
+
+    function scheduleJefePoll(delay) {
+        clearTimeout(jefePollTimer);
+        jefePollTimer = setTimeout(pollJefeUpdates, delay);
+    }
+
     function pollJefeUpdates() {
+        if (isPollingJefe) return;
+        isPollingJefe = true;
+
         fetch('/op/jefe-ventas/updates', {
             headers: {
                 'X-Requested-With': 'XMLHttpRequest',
                 'Accept': 'application/json'
             }
         })
-        .then(res => res.json())
+        .then(res => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
         .then(data => {
             const newOrders = data.ordenes;
             const newRequests = data.solicitudes;
@@ -1353,15 +1365,23 @@
 
             applyJefeFilters();
         })
-        .catch(err => console.log("AJAX updates polling error:", err));
+        .catch(err => {
+            console.log("AJAX updates polling error:", err);
+            jefeErrorBackoff = Math.min(jefeErrorBackoff * 2, 60000);
+        })
+        .finally(() => {
+            isPollingJefe = false;
+            scheduleJefePoll(jefeErrorBackoff === 15000 ? 15000 : jefeErrorBackoff);
+            if (jefeErrorBackoff !== 15000) jefeErrorBackoff = 15000;
+        });
     }
 
     document.addEventListener('DOMContentLoaded', () => {
         applyJefeFilters();
         updateSoundButtonUI();
-        
-        // Start polling updates every 15 seconds
-        setInterval(pollJefeUpdates, 15000);
+
+        // Start polling updates every 15 seconds with in-flight guard
+        scheduleJefePoll(15000);
     });
     function exportData(type) {
         const searchVal = document.getElementById('search-op')?.value || '';
