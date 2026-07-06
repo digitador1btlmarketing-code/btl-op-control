@@ -3,6 +3,21 @@
 use Illuminate\Support\Str;
 use Pdo\Mysql;
 
+$dbUrl = env('DATABASE_URL');
+$dbParams = [];
+if ($dbUrl) {
+    $parsedUrl = parse_url($dbUrl);
+    if ($parsedUrl) {
+        $dbParams = [
+            'host' => $parsedUrl['host'] ?? null,
+            'port' => $parsedUrl['port'] ?? null,
+            'database' => isset($parsedUrl['path']) ? ltrim($parsedUrl['path'], '/') : null,
+            'username' => $parsedUrl['user'] ?? null,
+            'password' => $parsedUrl['pass'] ?? null,
+        ];
+    }
+}
+
 return [
 
     /*
@@ -87,6 +102,11 @@ return [
         'pgsql' => [
             'driver' => 'pgsql',
             'url' => env('DATABASE_URL'),
+            'host' => $dbParams['host'] ?? '127.0.0.1',
+            'port' => $dbParams['port'] ?? '5432',
+            'database' => $dbParams['database'] ?? 'forge',
+            'username' => $dbParams['username'] ?? 'forge',
+            'password' => $dbParams['password'] ?? '',
             'charset' => 'utf8',
             'prefix' => '',
             'prefix_indexes' => true,
