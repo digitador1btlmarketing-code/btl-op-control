@@ -4,9 +4,6 @@ use Illuminate\Support\Str;
 use Pdo\Mysql;
 
 $dbUrl = env('DATABASE_URL');
-if (env('APP_ENV') === 'production' && empty($dbUrl)) {
-    throw new \Exception('DATABASE_URL is not set in production environment.');
-}
 $url = $dbUrl ? parse_url($dbUrl) : [];
 
 return [
