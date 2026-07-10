@@ -3,6 +3,26 @@
 @section('title', 'Portal de Creación de OPs')
 
 @section('content')
+<style>
+.spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 1s ease-in-out infinite;
+    -webkit-animation: spin 1s ease-in-out infinite;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+@-webkit-keyframes spin {
+    to { -webkit-transform: rotate(360deg); }
+}
+</style>
 <div style="max-width: 850px; margin: 0 auto; padding-bottom: 50px;">
     
     <!-- Corporate Header Banner -->
@@ -126,6 +146,15 @@
                 </div>
             </div>
 
+            <!-- Detalles de la OP -->
+            <div class="form-group">
+                <label for="detalles">Detalles de la OP</label>
+                <textarea id="detalles" name="detalles" class="form-control" rows="4" placeholder="Escriba aquí cualquier detalle o instrucción adicional para esta Orden de Producción (opcional).">{{ old('detalles') }}</textarea>
+                @error('detalles')
+                    <span style="color: var(--priority-urgente); font-size: 0.8rem;">{{ $message }}</span>
+                @enderror
+            </div>
+
             <!-- Brief File Upload -->
             <div class="form-group">
                 <label for="brief">Subir Planos / Diseños *</label>
@@ -195,7 +224,7 @@
 
                 <div class="grid-2">
                     <div class="form-group">
-                        <label for="fecha_desinstalacion">Fecha de Desinstalación *</label>
+                        <label for="fecha_desinstalacion">Fecha de Desinstalación</label>
                         <input type="date" id="fecha_desinstalacion" name="fecha_desinstalacion" class="form-control" value="{{ old('fecha_desinstalacion') }}">
                         @error('fecha_desinstalacion')
                             <span style="color: var(--priority-urgente); font-size: 0.8rem;">{{ $message }}</span>
@@ -203,7 +232,7 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="hora_desinstalacion">Hora de Desinstalación *</label>
+                        <label for="hora_desinstalacion">Hora de Desinstalación</label>
                         <input type="time" id="hora_desinstalacion" name="hora_desinstalacion" class="form-control" value="{{ old('hora_desinstalacion') }}">
                         @error('hora_desinstalacion')
                             <span style="color: var(--priority-urgente); font-size: 0.8rem;">{{ $message }}</span>
@@ -231,7 +260,11 @@
         const fields = container.querySelectorAll('input');
         if (select.value === 'Instaladores') {
             container.classList.remove('hidden');
-            fields.forEach(f => f.setAttribute('required', 'required'));
+            fields.forEach(f => {
+                if (f.id !== 'fecha_desinstalacion' && f.id !== 'hora_desinstalacion') {
+                    f.setAttribute('required', 'required');
+                }
+            });
         } else {
             container.classList.add('hidden');
             fields.forEach(f => f.removeAttribute('required'));
@@ -333,15 +366,31 @@
             }
 
             // Sync with DataTransfer ONLY on form submit to prevent browser event loop conflicts
+            let formSubmitted = false;
             const form = fileInput.closest('form');
             if (form) {
-                form.addEventListener('submit', function() {
+                form.addEventListener('submit', function(event) {
+                    if (formSubmitted) {
+                        event.preventDefault();
+                        return false;
+                    }
+                    
+                    formSubmitted = true;
+                    
                     if (selectedFiles.length > 0) {
                         const dataTransfer = new DataTransfer();
                         selectedFiles.forEach(file => {
                             dataTransfer.items.add(file);
                         });
                         fileInput.files = dataTransfer.files;
+                    }
+
+                    const submitBtn = form.querySelector('button[type="submit"]');
+                    if (submitBtn) {
+                        setTimeout(() => {
+                            submitBtn.disabled = true;
+                            submitBtn.innerHTML = 'Enviando OP... <span class="spinner"></span>';
+                        }, 0);
                     }
                 });
             }

@@ -1180,5 +1180,177 @@ class OrdenProduccionTest extends TestCase
         $this->assertEquals($op->id, $reproOP->parent_op_id);
         $this->assertEquals('OP-PARENT-TEST', $reproOP->parent->numero_op);
     }
+
+    /**
+     * Test optional desinstallation date.
+     */
+    public function test_optional_desinstallation_date(): void
+    {
+        session([
+            'user_role' => 'ventas',
+            'user_code' => 'DAFNE-RAMIREZ-PROD-2026',
+            'user_name' => 'DAFNE',
+        ]);
+
+        $response = $this->post('/op/nueva', [
+            'categoria' => 'Branding',
+            'numero_op' => 'OP-OPTIONAL-DATE-TEST',
+            'proyecto' => 'Optional Date Test',
+            'presupuestista' => 'Test Presup',
+            'cliente' => 'Test Client',
+            'marca' => 'Test Brand',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '12:00:00',
+            'entregar_a' => 'Instaladores',
+            'lugar_instalacion' => 'Lugar Test',
+            'fecha_instalacion' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_instalacion' => '10:00:00',
+            'fecha_desinstalacion' => '', // Empty desinstallation date
+            'hora_desinstalacion' => '',  // Empty desinstallation time
+        ]);
+
+        $response->assertRedirect('/op/nueva');
+        $response->assertSessionHas('success');
+
+        $op = OrdenProduccion::where('numero_op', 'OP-OPTIONAL-DATE-TEST')->first();
+        $this->assertNotNull($op);
+        $this->assertNull($op->fecha_desinstalacion);
+        $this->assertNull($op->hora_desinstalacion);
+    }
+
+    /**
+     * Test custom progress selection when status is En proceso.
+     */
+    public function test_custom_progress_in_process_status(): void
+    {
+        session(['user_role' => 'admin']);
+
+        $op = OrdenProduccion::create([
+            'categoria' => 'Branding',
+            'numero_op' => 'OP-PROGRESS-TEST',
+            'proyecto' => 'Progress Test',
+            'presupuestista' => 'Test Presup',
+            'cliente' => 'Test Client',
+            'marca' => 'Test Brand',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '12:00:00',
+            'entregar_a' => 'Cliente',
+            'estado' => 'Pendiente',
+        ]);
+
+        // Attempting to set progress to 75% via updateQuick
+        $response = $this->postJson("/op/admin/update/{$op->id}", [
+            'lider_produccion' => 'Lider Test',
+            'estado' => 'En proceso',
+            'avance' => 75,
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'avance' => 75,
+            ]);
+
+        $op->refresh();
+        $this->assertEquals(75, $op->avance);
+
+        // Attempting to set progress to 25% via updateQuick
+        $response = $this->postJson("/op/admin/update/{$op->id}", [
+            'lider_produccion' => 'Lider Test',
+            'estado' => 'En proceso',
+            'avance' => 25,
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'avance' => 25,
+            ]);
+
+        $op->refresh();
+        $this->assertEquals(25, $op->avance);
+
+        // Attempting to set an invalid progress value should fail validation
+        $response = $this->postJson("/op/admin/update/{$op->id}", [
+            'lider_produccion' => 'Lider Test',
+            'estado' => 'En proceso',
+            'avance' => 90, // Invalid value
+        ]);
+
+        $response->assertStatus(500);
+        $response->assertSee('avance');
+    }
+
+    /**
+     * Test new features: detalles, solicitante, and desinstallation label.
+     */
+    public function test_new_features_detalles_and_solicitante(): void
+    {
+        // 1. Create a user access record for the creator
+        $creator = \App\Models\UsuarioAcceso::create([
+            'codigo' => 'TEST-USER-CODE-123',
+            'nombre' => 'JUAN',
+            'apellido' => 'PÉREZ',
+            'rol' => 'ventas',
+            'activo' => true,
+        ]);
+
+        session([
+            'user_role' => 'ventas',
+            'user_code' => 'TEST-USER-CODE-123',
+            'user_name' => 'JUAN',
+        ]);
+
+        // Create an OP with details, without desinstallation
+        $response = $this->post('/op/nueva', [
+            'categoria' => 'Branding',
+            'numero_op' => 'OP-TEST-NEW-FEAT',
+            'proyecto' => 'New Features Test Campaign',
+            'presupuestista' => 'Test Presup',
+            'cliente' => 'Test Client',
+            'marca' => 'Test Brand',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '14:00:00',
+            'entregar_a' => 'Instaladores',
+            'lugar_instalacion' => 'CC Oakland',
+            'fecha_instalacion' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_instalacion' => '09:00:00',
+            'fecha_desinstalacion' => '',
+            'hora_desinstalacion' => '',
+            'detalles' => "Línea 1\nLínea 2\nLínea 3",
+        ]);
+
+        $response->assertRedirect('/op/nueva');
+        $response->assertSessionHas('success');
+
+        $op = OrdenProduccion::where('numero_op', 'OP-TEST-NEW-FEAT')->first();
+        $this->assertNotNull($op);
+        
+        // Assert details are correctly stored
+        $this->assertEquals("Línea 1\nLínea 2\nLínea 3", $op->detalles);
+        
+        // Assert solicitante full name is retrieved correctly
+        $this->assertEquals('JUAN PÉREZ', $op->solicitante);
+
+        // Assert empty desinstallation returns null in model
+        $this->assertNull($op->fecha_desinstalacion);
+        $this->assertNull($op->hora_desinstalacion);
+
+        // Assert that a legacy order without creator returns 'No disponible'
+        $legacyOp = OrdenProduccion::create([
+            'categoria' => 'Branding',
+            'numero_op' => 'OP-LEGACY-TEST-1',
+            'proyecto' => 'Legacy Campaign',
+            'presupuestista' => 'Test Presup',
+            'cliente' => 'Test Client',
+            'marca' => 'Test Brand',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '14:00:00',
+            'entregar_a' => 'Cliente',
+            'creado_por_codigo' => 'NON-EXISTING-CODE',
+        ]);
+        $this->assertEquals('No disponible', $legacyOp->solicitante);
+        $this->assertEquals('Sin detalles adicionales.', $legacyOp->detalles && trim($legacyOp->detalles) !== '' ? $legacyOp->detalles : 'Sin detalles adicionales.');
+    }
 }
 

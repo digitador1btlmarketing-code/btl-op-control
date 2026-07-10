@@ -282,6 +282,10 @@
             <div id="detail-entregar-a" class="detail-val">-</div>
         </div>
         <div class="detail-item">
+            <div class="detail-label">Solicitante</div>
+            <div id="detail-solicitante" class="detail-val">-</div>
+        </div>
+        <div class="detail-item">
             <div class="detail-label">Planos / Archivos Adjuntos</div>
             <div id="detail-brief" class="detail-val brief-container">-</div>
         </div>
@@ -304,6 +308,12 @@
                 <div id="detail-fecha-desinst" class="detail-val">-</div>
             </div>
         </div>
+    </div>
+
+    <!-- Detalles de la OP -->
+    <div style="margin-top: 15px; border-top: 1px solid var(--border-glass); padding-top: 15px;">
+        <h4 style="font-size: 1rem; color: var(--blue-bright); margin-bottom: 10px;">Detalles de la OP</h4>
+        <div id="detail-detalles" style="white-space: pre-wrap; color: var(--text-white); font-size: 0.95rem; line-height: 1.5; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-glass); padding: 12px; border-radius: 8px;">-</div>
     </div>
 
     <!-- Reproceso request block and history -->
@@ -455,6 +465,8 @@
         
         document.getElementById('detail-avance').textContent = `${order.avance}%`;
         document.getElementById('detail-entregar-a').textContent = order.entregar_a;
+        document.getElementById('detail-solicitante').textContent = order.solicitante || 'No disponible';
+        document.getElementById('detail-detalles').textContent = order.detalles && order.detalles.trim() !== '' ? order.detalles : 'Sin detalles adicionales.';
         
         const briefDiv = document.getElementById('detail-brief');
         let filesHtml = '';
@@ -500,16 +512,14 @@
             }
             document.getElementById('detail-fecha-inst').textContent = `${fmtInstDate} - ${fmtInstTime} hrs`;
             
-            let fmtDesinstDate = '-';
-            let fmtDesinstTime = '-';
             if (order.fecha_desinstalacion) {
                 const rawDesinstDate = order.fecha_desinstalacion.split('-');
-                fmtDesinstDate = `${rawDesinstDate[2]}/${rawDesinstDate[1]}/${rawDesinstDate[0]}`;
+                const fmtDesinstDate = `${rawDesinstDate[2]}/${rawDesinstDate[1]}/${rawDesinstDate[0]}`;
+                const fmtDesinstTime = order.hora_desinstalacion ? order.hora_desinstalacion.substring(0, 5) : '00:00';
+                document.getElementById('detail-fecha-desinst').textContent = `${fmtDesinstDate} - ${fmtDesinstTime} hrs`;
+            } else {
+                document.getElementById('detail-fecha-desinst').textContent = 'No hay desinstalación';
             }
-            if (order.hora_desinstalacion) {
-                fmtDesinstTime = order.hora_desinstalacion.substring(0, 5);
-            }
-            document.getElementById('detail-fecha-desinst').textContent = `${fmtDesinstDate} - ${fmtDesinstTime} hrs`;
         } else {
             instSection.classList.add('hidden');
         }

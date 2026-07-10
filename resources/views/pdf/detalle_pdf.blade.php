@@ -176,6 +176,12 @@
         <tr>
             <td class="label">Presupuestista:</td>
             <td class="value">{{ $orden->presupuestista }}</td>
+            <td class="label">Solicitante:</td>
+            <td class="value" style="font-weight: bold; color: #0c1c2e;">{{ $orden->solicitante }}</td>
+        </tr>
+        <tr>
+            <td class="label">Líder Producción:</td>
+            <td class="value" style="font-weight: bold; color: #0c1c2e;">{{ $orden->lider_produccion ?: 'No asignado' }}</td>
             <td class="label">Creado por:</td>
             <td class="value">
                 {{ $orden->creado_por_nombre }} <br>
@@ -183,10 +189,8 @@
             </td>
         </tr>
         <tr>
-            <td class="label">Líder Producción:</td>
-            <td class="value" style="font-weight: bold; color: #0c1c2e;">{{ $orden->lider_produccion ?: 'No asignado' }}</td>
             <td class="label">Fecha y Hora Entrega:</td>
-            <td class="value" style="font-weight: bold;">
+            <td class="value" style="font-weight: bold;" colspan="3">
                 {{ \Carbon\Carbon::parse($orden->fecha_entrega)->format('d/m/Y') }} a las {{ \Carbon\Carbon::parse($orden->hora_entrega)->format('H:i') }} hrs
             </td>
         </tr>
@@ -226,13 +230,20 @@
                 </td>
                 <td class="label">Fecha Desinstalación:</td>
                 <td class="value">
-                    {{ $orden->fecha_desinstalacion ? \Carbon\Carbon::parse($orden->fecha_desinstalacion)->format('d/m/Y') : '-' }} 
-                    a las 
-                    {{ $orden->hora_desinstalacion ? \Carbon\Carbon::parse($orden->hora_desinstalacion)->format('H:i') : '-' }} hrs
+                    @if($orden->fecha_desinstalacion)
+                        {{ \Carbon\Carbon::parse($orden->fecha_desinstalacion)->format('d/m/Y') }} a las {{ $orden->hora_desinstalacion ? \Carbon\Carbon::parse($orden->hora_desinstalacion)->format('H:i') : '00:00' }} hrs
+                    @else
+                        No hay desinstalación
+                    @endif
                 </td>
             </tr>
         </table>
     @endif
+
+    <div class="section-title">Detalles de la OP</div>
+    <div style="white-space: pre-wrap; font-size: 10px; border: 1px solid #e1e8ed; padding: 10px; background-color: #f7f9fa; border-radius: 3px; margin-bottom: 15px;">
+        {{ $orden->detalles && trim($orden->detalles) !== '' ? $orden->detalles : 'Sin detalles adicionales.' }}
+    </div>
 
     <div class="section-title">Historial de Eventos de la OP</div>
     @if($orden->historial->count() > 0)

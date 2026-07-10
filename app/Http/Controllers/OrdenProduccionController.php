@@ -42,6 +42,7 @@ class OrdenProduccionController extends Controller
             'entregar_a' => 'required|in:Cliente,Bodega,Instaladores',
             'brief' => 'nullable|array',
             'brief.*' => 'file|max:102400',
+            'detalles' => 'nullable|string',
         ];
 
         // Conditional validation based on entregar_a
@@ -49,8 +50,8 @@ class OrdenProduccionController extends Controller
             $rules['lugar_instalacion'] = 'required|string|max:255';
             $rules['fecha_instalacion'] = 'required|date';
             $rules['hora_instalacion'] = 'required';
-            $rules['fecha_desinstalacion'] = 'required|date';
-            $rules['hora_desinstalacion'] = 'required';
+            $rules['fecha_desinstalacion'] = 'nullable|date';
+            $rules['hora_desinstalacion'] = 'nullable';
         }
 
         $validated = $request->validate($rules, [
@@ -66,8 +67,6 @@ class OrdenProduccionController extends Controller
             'lugar_instalacion.required' => 'El lugar de instalación es obligatorio.',
             'fecha_instalacion.required' => 'La fecha de instalación es obligatoria.',
             'hora_instalacion.required' => 'La hora de instalación es obligatoria.',
-            'fecha_desinstalacion.required' => 'La fecha de desinstalación es obligatoria.',
-            'hora_desinstalacion.required' => 'La hora de desinstalación es obligatoria.',
             'brief.*.max' => 'El archivo no debe pesar más de 100MB.',
         ]);
 
@@ -243,6 +242,7 @@ class OrdenProduccionController extends Controller
         $request->validate([
             'lider_produccion' => 'nullable|string|max:255',
             'estado' => 'required|in:Pendiente,En proceso,Terminado,Cancelado,En espera',
+            'avance' => 'nullable|in:25,50,75',
         ]);
 
         $orden = OrdenProduccion::findOrFail($id);
@@ -250,10 +250,16 @@ class OrdenProduccionController extends Controller
         $oldEstado = $orden->estado;
         $oldAvance = $orden->avance;
 
-        $orden->update([
+        $updateData = [
             'lider_produccion' => $request->input('lider_produccion'),
             'estado' => $request->input('estado'),
-        ]);
+        ];
+
+        if ($request->input('estado') === 'En proceso' && $request->has('avance')) {
+            $updateData['avance'] = (int) $request->input('avance');
+        }
+
+        $orden->update($updateData);
 
         // Refresh to get the auto-calculated progress
         $orden->refresh();
@@ -347,7 +353,7 @@ class OrdenProduccionController extends Controller
     public function tvUpdates(Request $request)
     {
         $categoria = $request->query('categoria', 'Branding');
-        $ordenesRaw = OrdenProduccion::with([])
+        $ordenesRaw = OrdenProduccion::with(['archivos'])
             ->where(function($q) use ($categoria) {
                 $q->where('categoria', $categoria)
                   ->orWhere(function($sub) use ($categoria) {
@@ -387,7 +393,7 @@ class OrdenProduccionController extends Controller
     public function adminUpdates()
     {
         $userRole = session('user_role');
-        $query = OrdenProduccion::with(['solicitudPendiente', 'reprocesos', 'solicitudesReproceso']);
+        $query = OrdenProduccion::with(['solicitudPendiente', 'archivos', 'reprocesos', 'solicitudesReproceso']);
 
         if ($userRole === 'admin_branding') {
             $query->where(function ($q) {
@@ -557,7 +563,7 @@ class OrdenProduccionController extends Controller
     public function misOrdenesUpdates()
     {
         $vendedorCodigo = session('user_code');
-        $ordenes = OrdenProduccion::with(['reprocesos', 'solicitudesReproceso'])
+        $ordenes = OrdenProduccion::with(['archivos', 'reprocesos', 'solicitudesReproceso'])
             ->where(function($q) use ($vendedorCodigo) {
                 $q->where('creado_por_codigo', $vendedorCodigo)
                   ->orWhere(function($sub) use ($vendedorCodigo) {
@@ -661,7 +667,7 @@ class OrdenProduccionController extends Controller
     {
         $jefeCodigo = session('user_code');
 
-        $ordenes = OrdenProduccion::with(['reprocesos', 'solicitudesReproceso'])->where(function ($query) use ($jefeCodigo) {
+        $ordenes = OrdenProduccion::with(['archivos', 'reprocesos', 'solicitudesReproceso'])->where(function ($query) use ($jefeCodigo) {
             $query->where(function ($q) use ($jefeCodigo) {
                 $q->whereIn('creado_por_codigo', function ($sub) use ($jefeCodigo) {
                     $sub->select('codigo')

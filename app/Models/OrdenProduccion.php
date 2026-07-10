@@ -36,6 +36,7 @@ class OrdenProduccion extends Model
         'creado_por_rol',
         'reproceso_de_id',
         'parent_op_id',
+        'detalles',
     ];
 
     protected $attributes = [
@@ -48,6 +49,7 @@ class OrdenProduccion extends Model
         'prioridad',
         'mostrar_fuego',
         'creado_por_jefe_codigo',
+        'solicitante',
     ];
 
     protected $casts = [
@@ -62,7 +64,9 @@ class OrdenProduccion extends Model
             if ($orden->estado === 'Pendiente') {
                 $orden->avance = 0;
             } elseif ($orden->estado === 'En proceso') {
-                $orden->avance = 50;
+                if (!in_array((int)$orden->avance, [25, 50, 75])) {
+                    $orden->avance = 50;
+                }
             } elseif ($orden->estado === 'Terminado') {
                 $orden->avance = 100;
             } elseif ($orden->estado === 'Cancelado') {
@@ -214,6 +218,25 @@ class OrdenProduccion extends Model
     public function solicitudReprocesoPendiente()
     {
         return $this->hasOne(SolicitudReproceso::class, 'orden_produccion_id')->where('estado', 'Pendiente');
+    }
+
+    /**
+     * Get the user who created the production order.
+     */
+    public function creador()
+    {
+        return $this->belongsTo(UsuarioAcceso::class, 'creado_por_codigo', 'codigo');
+    }
+
+    /**
+     * Get the full name of the solicitor (creator).
+     */
+    public function getSolicitanteAttribute()
+    {
+        if ($this->creador) {
+            return trim($this->creador->nombre . ' ' . ($this->creador->apellido ?? ''));
+        }
+        return 'No disponible';
     }
 }
 
