@@ -5,5 +5,5 @@
 - `[x]` Implementar filtrado en SQL y paginación (`paginate(20)`) en `OrdenProduccionController.php`.
 - `[x]` Adaptar las vistas Blade para soportar paginación, filtros y sondeo (polling).
 - `[x]` Ejecutar las pruebas locales para asegurar que todo pase con éxito.
-- `[ ]` Subir los cambios a GitHub y realizar el deploy en Render.
-- `[ ]` Validar el rendimiento del sistema en producción.
+- `[x]` Subir los cambios a GitHub y realizar el deploy en Render.
+- `[x]` Validar el rendimiento del sistema en producción.

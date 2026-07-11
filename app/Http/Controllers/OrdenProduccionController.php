@@ -289,6 +289,18 @@ class OrdenProduccionController extends Controller
                 });
         }
 
+        // Detectar petición AJAX de filtros — responder solo el partial + datos JSON
+        if ($request->ajax() || $request->header('X-Requested-With') === 'XMLHttpRequest') {
+            $html = view('op.partials.listado-op', compact('ordenes'))->render();
+            return response()->json([
+                'html'        => $html,
+                'kpis'        => $kpis,
+                'ordenes'     => $ordenes->items(),
+                'currentPage' => $ordenes->currentPage(),
+                'lastPage'    => $ordenes->lastPage(),
+            ]);
+        }
+
         return view('op.admin', compact('ordenes', 'kpis', 'usuarios', 'solicitudes', 'solicitudesReproceso'));
     }
 

@@ -3,14 +3,6 @@
 @section('title', 'Bandeja de Producción')
 
 @section('content')
-<!-- Forms container for HTML5 form association -->
-<div id="forms-container">
-@foreach($ordenes as $orden)
-    <form id="form-{{ $orden->id }}" action="{{ route('op.update', $orden->id) }}" method="POST">
-        @csrf
-    </form>
-@endforeach
-</div>
 
 <div style="margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
     <div>
@@ -182,245 +174,74 @@
     </div>
 </div>
 
+<!-- Estilos del listado (fuera del contenedor AJAX para que persistan al actualizar) -->
+<style>
+    .category-tabs-container {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        border-bottom: 1px solid var(--border-glass);
+        position: relative;
+    }
+    .category-tab {
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        font-size: 0.95rem;
+        font-weight: 600;
+        padding: 10px 16px;
+        cursor: pointer;
+        position: relative;
+        transition: var(--transition);
+        margin-bottom: -1px; /* overlap the border */
+    }
+    .category-tab:hover {
+        color: var(--text-white);
+    }
+    .category-tab.active {
+        color: var(--blue-bright);
+        font-weight: 700;
+    }
+    .category-tab.active::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 2px;
+        background: var(--blue-bright);
+        box-shadow: 0 0 8px var(--blue-bright);
+    }
+    .admin-row {
+        cursor: pointer;
+    }
+    .admin-row:hover {
+        background: rgba(0, 210, 255, 0.04) !important;
+    }
+    .admin-row.active {
+        background: rgba(0, 210, 255, 0.08) !important;
+    }
+    @keyframes spin-listado {
+        to { transform: rotate(360deg); }
+    }
+    #op-listado-container {
+        position: relative;
+    }
+    #op-listado-container.is-loading {
+        opacity: 0.6;
+        pointer-events: none;
+    }
+</style>
+
 <!-- Main Table -->
 <div class="card">
-    <style>
-        .category-tabs-container {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            border-bottom: 1px solid var(--border-glass);
-            position: relative;
-        }
-        .category-tab {
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            font-size: 0.95rem;
-            font-weight: 600;
-            padding: 10px 16px;
-            cursor: pointer;
-            position: relative;
-            transition: var(--transition);
-            margin-bottom: -1px; /* overlap the border */
-        }
-        .category-tab:hover {
-            color: var(--text-white);
-        }
-        .category-tab.active {
-            color: var(--blue-bright);
-            font-weight: 700;
-        }
-        .category-tab.active::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 2px;
-            background: var(--blue-bright);
-            box-shadow: 0 0 8px var(--blue-bright);
-        }
-        .admin-row {
-            cursor: pointer;
-        }
-        .admin-row:hover {
-            background: rgba(0, 210, 255, 0.04) !important;
-        }
-        .admin-row.active {
-            background: rgba(0, 210, 255, 0.08) !important;
-        }
-    </style>
-
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
-        <h3 style="font-size: 1.2rem; font-weight: 700; color: var(--blue-bright); margin: 0;">
-            Listado de Órdenes de Producción
-        </h3>
-        
-        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-            <!-- Search by OP number -->
-            <div style="position: relative; min-width: 220px;">
-                <input 
-                    type="text" 
-                    id="search-op" 
-                    placeholder="Buscar por número OP (Presione Enter)..." 
-                    class="form-control" 
-                    style="padding: 8px 12px; font-size: 0.9rem; height: 38px; width: 100%;"
-                    value="{{ request('search') }}"
-                    onkeydown="if(event.key === 'Enter') submitFilters()"
-                >
-            </div>
-            
-            <!-- Filter by Status -->
-            <div style="min-width: 180px;">
-                <select 
-                    id="filter-status" 
-                    class="form-control" 
-                    style="padding: 8px 12px; font-size: 0.9rem; height: 38px; cursor: pointer; width: 100%;"
-                    onchange="submitFilters()"
-                >
-                    <option value="activas" {{ request('status', 'activas') === 'activas' ? 'selected' : '' }}>Todas activas</option>
-                    <option value="Pendiente" {{ request('status') === 'Pendiente' ? 'selected' : '' }}>Pendientes</option>
-                    <option value="En proceso" {{ request('status') === 'En proceso' ? 'selected' : '' }}>En proceso</option>
-                    <option value="En espera" {{ request('status') === 'En espera' ? 'selected' : '' }}>En espera</option>
-                    <option value="Terminado" {{ request('status') === 'Terminado' ? 'selected' : '' }}>Terminadas</option>
-                    <option value="Cancelado" {{ request('status') === 'Cancelado' ? 'selected' : '' }}>Canceladas</option>
-                    <option value="todos" {{ request('status') === 'todos' ? 'selected' : '' }}>Todas</option>
-                </select>
-            </div>
-        </div>
+    <!-- Contenedor AJAX: solo este bloque se reemplaza en cada filtrado -->
+    <div id="op-listado-container">
+        @include('op.partials.listado-op')
     </div>
-    
-    <!-- Category Tabs -->
-    @if(in_array(session('user_role'), ['admin', 'admin_branding', 'admin_promo']))
-    @php
-        $defaultCat = session('user_role') === 'admin_branding' ? 'Branding' : (session('user_role') === 'admin_promo' ? 'Promocional' : 'todos');
-        $activeCat = request('category', $defaultCat);
-    @endphp
-    <div class="category-tabs-container">
-        <button class="category-tab {{ $activeCat === 'todos' ? 'active' : '' }}" data-category="todos" onclick="selectCategoryTab('todos')">Todas</button>
-        <button class="category-tab {{ $activeCat === 'Branding' ? 'active' : '' }}" data-category="Branding" onclick="selectCategoryTab('Branding')">Branding</button>
-        <button class="category-tab {{ $activeCat === 'Promocional' ? 'active' : '' }}" data-category="Promocional" onclick="selectCategoryTab('Promocional')">Promocional</button>
-        <button class="category-tab {{ $activeCat === 'Reprocesos' ? 'active' : '' }}" data-category="Reprocesos" onclick="selectCategoryTab('Reprocesos')">Reprocesos</button>
-    </div>
-    @endif
-    
-    <div class="table-responsive">
-        <table>
-            <thead>
-                <tr>
-                    <th>Ticket OP</th>
-                    <th>Categoría</th>
-                    <th>Marca</th>
-                    <th>Cliente</th>
-                    <th>Presupuestista</th>
-                    <th>Líder Producción</th>
-                    <th>Fecha Entrega</th>
-                    <th>Estado</th>
-                    <th>Avance</th>
-                    <th>Acciones</th>
-                </tr>
-            </thead>
-            <tbody id="admin-table-body">
-                @forelse($ordenes as $orden)
-                    <tr class="admin-row" id="row-{{ $orden->id }}" data-id="{{ $orden->id }}" data-estado="{{ $orden->estado }}" data-prioridad="{{ $orden->prioridad }}" data-numero-op="{{ $orden->numero_op }}" data-categoria="{{ $orden->categoria }}">
-                        <td>
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <strong style="color: var(--text-white);">{{ $orden->numero_op }}</strong>
-                                <span id="fire-container-{{ $orden->id }}" class="fire-container @if($orden->estado === 'Terminado' || $orden->estado === 'Cancelado') extinguished @elseif(!$orden->mostrar_fuego) hidden-fire @endif" title="Alerta de prioridad temporal">
-                                    <span class="fire-flame">🔥</span>
-                                </span>
-                            </div>
-                        </td>
-                        <td>
-                            @php
-                                $badgeCategoryClass = $orden->categoria === 'Branding' ? 'badge-normal' : 
-                                                      ($orden->categoria === 'Promocional' ? 'badge-proxima' : '');
-                            @endphp
-                            <span class="badge {{ $badgeCategoryClass }}" style="{{ $orden->categoria === 'Reprocesos' ? 'background: rgba(255, 95, 56, 0.15); color: #ff5f38; border: 1px solid rgba(255, 95, 56, 0.3);' : '' }}">
-                                {{ $orden->categoria === 'Reprocesos' ? 'REPROCESO' : $orden->categoria }}
-                            </span>
-                        </td>
-                        <td>{{ $orden->marca }}</td>
-                        <td>{{ $orden->cliente }}</td>
-                        <td>{{ $orden->presupuestista }}</td>
-                        <td>
-                            <input 
-                                type="text" 
-                                name="lider_produccion" 
-                                form="form-{{ $orden->id }}" 
-                                value="{{ $orden->lider_produccion }}" 
-                                placeholder="Asignar líder..." 
-                                class="admin-input-lider"
-                            >
-                        </td>
-                        <td>
-                            <span class="text-dash">{{ \Carbon\Carbon::parse($orden->fecha_entrega)->format('d/m/Y') }}</span>
-                            <br>
-                            <small style="color: var(--text-muted); font-weight: 600;">
-                                {{ \Carbon\Carbon::parse($orden->hora_entrega)->format('H:i') }}
-                            </small>
-                        </td>
-                        <td>
-                            <select 
-                                name="estado" 
-                                form="form-{{ $orden->id }}" 
-                                class="admin-select select-status" 
-                                data-id="{{ $orden->id }}"
-                            >
-                                <option value="Pendiente" {{ $orden->estado === 'Pendiente' ? 'selected' : '' }}>Pendiente</option>
-                                <option value="En proceso" {{ $orden->estado === 'En proceso' ? 'selected' : '' }}>En proceso</option>
-                                <option value="En espera" {{ $orden->estado === 'En espera' ? 'selected' : '' }}>En espera</option>
-                                <option value="Terminado" {{ $orden->estado === 'Terminado' ? 'selected' : '' }}>Terminado</option>
-                                <option value="Cancelado" {{ $orden->estado === 'Cancelado' ? 'selected' : '' }}>Cancelado</option>
-                            </select>
-                        </td>
-                        <td>
-                            <div class="progress-container" style="min-width: 100px;">
-                                <div class="progress-track">
-                                    <div 
-                                        id="progress-fill-{{ $orden->id }}" 
-                                        class="progress-fill 
-                                            @if($orden->estado === 'Pendiente') progress-fill-pendiente
-                                            @elseif($orden->estado === 'En proceso') progress-fill-proceso
-                                            @elseif($orden->estado === 'Cancelado') progress-fill-cancelado
-                                            @elseif($orden->estado === 'En espera') progress-fill-en-espera
-                                            @else progress-fill-terminado @endif"
-                                        style="width: {{ $orden->avance }}%;"
-                                    ></div>
-                                </div>
-                                <span id="progress-text-{{ $orden->id }}" class="progress-text">
-                                    {{ $orden->avance }}%
-                                </span>
-                            </div>
-                            <select 
-                                name="avance" 
-                                form="form-{{ $orden->id }}" 
-                                class="admin-select select-avance" 
-                                id="select-avance-{{ $orden->id }}"
-                                style="margin-top: 5px; width: 100%; display: {{ $orden->estado === 'En proceso' ? 'block' : 'none' }}; background: rgba(0, 0, 0, 0.4); color: var(--text-white); border: 1px solid var(--border-glass); border-radius: 4px; padding: 2px 4px; font-size: 0.8rem;"
-                            >
-                                <option value="25" {{ $orden->avance == 25 ? 'selected' : '' }}>25%</option>
-                                <option value="50" {{ $orden->avance == 50 ? 'selected' : '' }}>50%</option>
-                                <option value="75" {{ $orden->avance == 75 ? 'selected' : '' }}>75%</option>
-                            </select>
-                        </td>
-                        <td>
-                            <button type="submit" form="form-{{ $orden->id }}" class="btn-save-inline">
-                                Guardar
-                            </button>
-                        </td>
-                    </tr>
-                @empty
-                    <tr id="empty-row">
-                        <td colspan="10" style="text-align: center; color: var(--text-muted); padding: 40px;">
-                            No hay órdenes de producción registradas.
-                        </td>
-                    </tr>
-                @endforelse
-            </tbody>
-        </table>
-    </div>
-
-    <!-- Paginación -->
-    @if($ordenes->hasPages())
-        <div class="pagination-container" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px; padding: 10px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-glass); border-radius: 8px;">
-            @if($ordenes->onFirstPage())
-                <span style="opacity: 0.5; pointer-events: none; padding: 6px 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); border-radius: 6px; color: var(--text-muted); font-size: 0.85rem;">« Anterior</span>
-            @else
-                <a href="{{ $ordenes->appends(request()->query())->previousPageUrl() }}" class="btn-save-inline" style="padding: 6px 12px; background: rgba(0, 210, 255, 0.1); border: 1px solid rgba(0, 210, 255, 0.25); border-radius: 6px; color: var(--blue-bright); text-decoration: none; font-size: 0.85rem;">« Anterior</a>
-            @endif
-
-            <span style="color: var(--text-muted); font-size: 0.85rem; font-weight: 600;">Página {{ $ordenes->currentPage() }} de {{ $ordenes->lastPage() }}</span>
-
-            @if($ordenes->hasMorePages())
-                <a href="{{ $ordenes->appends(request()->query())->nextPageUrl() }}" class="btn-save-inline" style="padding: 6px 12px; background: rgba(0, 210, 255, 0.1); border: 1px solid rgba(0, 210, 255, 0.25); border-radius: 6px; color: var(--blue-bright); text-decoration: none; font-size: 0.85rem;">Siguiente »</a>
-            @else
-                <span style="opacity: 0.5; pointer-events: none; padding: 6px 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); border-radius: 6px; color: var(--text-muted); font-size: 0.85rem;">Siguiente »</span>
-            @endif
-        </div>
-    @endif
 </div>
+
+
 
 <!-- Panel de Detalle de Orden Seleccionada -->
 <div id="detail-panel" class="detail-panel hidden" style="margin-top: 25px; position: relative;">
@@ -1011,10 +832,69 @@
     const storageBaseUrl = "/storage";
     let notifiedResolutions = new Set();
 
-    function selectCategoryTab(category) {
-        activeCategory = category;
-        
-        // Update active class on tab buttons
+    // ─────────────────────────────────────────────────────────────────────────
+    // FILTROS AJAX — sin recarga de página completa
+    // ─────────────────────────────────────────────────────────────────────────
+
+    const ADMIN_URL = "{{ route('op.admin') }}";
+    let lastFilterParams = null;  // para el botón "Reintentar"
+    let searchDebounceTimer = null;
+
+    /** Muestra el loader discreto dentro del contenedor del listado */
+    function showListadoLoader() {
+        const container = document.getElementById('op-listado-container');
+        if (container) container.classList.add('is-loading');
+        const loader = document.getElementById('listado-loader');
+        if (loader) loader.style.display = 'block';
+    }
+
+    /** Oculta el loader discreto */
+    function hideListadoLoader() {
+        const container = document.getElementById('op-listado-container');
+        if (container) container.classList.remove('is-loading');
+        const loader = document.getElementById('listado-loader');
+        if (loader) loader.style.display = 'none';
+    }
+
+    /** Muestra el mensaje de error AJAX inline */
+    function showListadoError() {
+        const el = document.getElementById('listado-error');
+        if (el) el.style.display = 'block';
+    }
+
+    /** Oculta el mensaje de error */
+    function hideListadoError() {
+        const el = document.getElementById('listado-error');
+        if (el) el.style.display = 'none';
+    }
+
+    /** Reintentar el último filtro fallido */
+    function retryLastFilter() {
+        if (lastFilterParams) {
+            doFetchListado(lastFilterParams);
+        }
+    }
+
+    /**
+     * Actualiza los KPIs en los elementos del DOM superior.
+     * No afecta solicitudes ni otra lógica.
+     */
+    function updateKpisDOM(kpis) {
+        if (!kpis) return;
+        const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+        set('kpi-total',      kpis.total       ?? 0);
+        set('kpi-pendientes', kpis.pendientes   ?? 0);
+        set('kpi-en-proceso', kpis.en_proceso   ?? 0);
+        set('kpi-en-espera',  kpis.en_espera    ?? 0);
+        set('kpi-terminadas', kpis.terminadas   ?? 0);
+        set('kpi-urgentes',   kpis.urgentes     ?? 0);
+    }
+
+    /**
+     * Sincroniza el tab activo visualmente.
+     * Se llama después de reemplazar el HTML del partial.
+     */
+    function syncCategoryTabs(category) {
         document.querySelectorAll('.category-tab').forEach(tab => {
             if (tab.getAttribute('data-category') === category) {
                 tab.classList.add('active');
@@ -1022,22 +902,225 @@
                 tab.classList.remove('active');
             }
         });
-        
-        submitFilters();
     }
 
-    function submitFilters() {
-        const searchVal = document.getElementById('search-op').value.trim();
-        const filterVal = document.getElementById('filter-status').value;
+    /**
+     * Intercepta los enlaces de paginación dentro del contenedor del listado
+     * para que también usen AJAX en lugar de navegar a una URL completa.
+     * Usar delegación de eventos para evitar duplicados.
+     */
+    function bindPaginationLinks() {
+        // Usar delegación desde el contenedor padre estable
+        // (el listener se registra una sola vez en DOMContentLoaded)
+    }
+
+    /**
+     * Ejecuta el fetch AJAX al controlador admin() con los parámetros indicados.
+     * Reemplaza el innerHTML de #op-listado-container con el HTML parcial devuelto.
+     */
+    function doFetchListado(params) {
+        lastFilterParams = params;
+        const queryString = new URLSearchParams(params).toString();
+        const url = `${ADMIN_URL}?${queryString}`;
+
+        // Preservar scroll actual
+        const scrollY = window.scrollY;
+
+        showListadoLoader();
+        hideListadoError();
+
+        // Actualizar URL del navegador (sin recargar)
+        history.pushState(params, '', url);
+
+        fetch(url, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
+        })
+        .then(res => {
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.json();
+        })
+        .then(data => {
+            // Reemplazar el contenido del contenedor AJAX
+            const container = document.getElementById('op-listado-container');
+            if (container) {
+                container.innerHTML = data.html;
+            }
+
+            // Restaurar estado visual del tab activo
+            syncCategoryTabs(params.category || 'todos');
+
+            // Sincronizar allOrders con los datos recibidos
+            if (data.ordenes) {
+                allOrders = data.ordenes;
+            } else {
+                // Leer desde el script JSON embebido en el partial
+                const jsonEl = document.getElementById('listado-orders-data');
+                if (jsonEl) {
+                    try { allOrders = JSON.parse(jsonEl.textContent); } catch(e) {}
+                }
+            }
+
+            // Actualizar KPIs del panel superior
+            updateKpisDOM(data.kpis);
+
+            // Restaurar detalle si había una OP seleccionada
+            if (selectedOrderId) {
+                const stillHere = allOrders.find(o => o.id === selectedOrderId);
+                if (stillHere) {
+                    // Re-marcar fila activa (HTML fue reemplazado)
+                    const row = document.getElementById('row-' + selectedOrderId);
+                    if (row) row.classList.add('active');
+                } else {
+                    hideDetail();
+                }
+            }
+
+            // Restaurar posición de scroll (no saltar al inicio)
+            window.scrollTo({ top: scrollY, behavior: 'instant' });
+
+            hideListadoLoader();
+        })
+        .catch(err => {
+            console.error('[AJAX filtros]', err);
+            hideListadoLoader();
+            showListadoError();
+            // Revertir URL al estado anterior sin el push fallido
+            history.replaceState(lastFilterParams, '', `${ADMIN_URL}?${new URLSearchParams(lastFilterParams).toString()}`);
+        });
+    }
+
+    /**
+     * Recopila los valores de los filtros y lanza el fetch.
+     * page: número de página a solicitar (por defecto 1).
+     */
+    function submitFilters(page) {
+        page = page || 1;
+        const searchVal  = (document.getElementById('search-op')     || {value: ''}).value.trim();
+        const filterVal  = (document.getElementById('filter-status') || {value: 'activas'}).value;
         const categoryVal = activeCategory;
-        
-        window.location.href = `{{ route('op.admin') }}?search=${encodeURIComponent(searchVal)}&status=${encodeURIComponent(filterVal)}&category=${encodeURIComponent(categoryVal)}`;
+
+        doFetchListado({ search: searchVal, status: filterVal, category: categoryVal, page: page });
+    }
+
+    /** Cambia la pestaña activa y lanza el filtro AJAX */
+    function selectCategoryTab(category) {
+        activeCategory = category;
+        syncCategoryTabs(category);
+        submitFilters(1);
     }
 
     function applyAdminFilters() {
-        // Passive function to prevent breaking old callbacks.
-        // Server side pagination/filtering takes care of state.
+        // Mantenido por compatibilidad con callbacks existentes (polling).
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // DEBOUNCE DE BÚSQUEDA + INTERCEPTACIÓN DE PAGINACIÓN + POPSTATE
+    // ─────────────────────────────────────────────────────────────────────────
+
+    document.addEventListener('DOMContentLoaded', function () {
+
+        // 1. Debounce en el campo de búsqueda (500ms) + Enter inmediato
+        document.addEventListener('input', function (e) {
+            if (e.target && e.target.id === 'search-op') {
+                clearTimeout(searchDebounceTimer);
+                searchDebounceTimer = setTimeout(() => submitFilters(1), 500);
+            }
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.target && e.target.id === 'search-op' && e.key === 'Enter') {
+                clearTimeout(searchDebounceTimer);
+                submitFilters(1);
+            }
+        });
+
+        // 2. Cambio del select de estado → AJAX inmediato
+        document.addEventListener('change', function (e) {
+            if (e.target && e.target.id === 'filter-status') {
+                submitFilters(1);
+            }
+        });
+
+        // 3. Delegación de eventos para links de paginación (clase .pagination-link)
+        //    Se aplica al documento completo para que funcione aunque se reemplace el HTML
+        document.addEventListener('click', function (e) {
+            const link = e.target.closest('.pagination-link');
+            if (!link) return;
+
+            e.preventDefault();
+            const href = link.getAttribute('href');
+            if (!href) return;
+
+            // Extraer parámetros de la URL del link de paginación
+            try {
+                const url = new URL(href, window.location.origin);
+                const page     = url.searchParams.get('page')     || 1;
+                const search   = url.searchParams.get('search')   || '';
+                const status   = url.searchParams.get('status')   || 'activas';
+                const category = url.searchParams.get('category') || activeCategory;
+
+                // Asegurar consistencia con la UI actual
+                activeCategory = category;
+                doFetchListado({ search, status, category, page });
+            } catch (err) {
+                // Si falla el parseo, navegar normalmente
+                window.location.href = href;
+            }
+        });
+
+        // 4. Botón Atrás/Adelante del navegador → restaurar filtros sin recargar
+        window.addEventListener('popstate', function (event) {
+            if (event.state) {
+                // Restaurar UI con los valores del estado
+                const s = event.state;
+                activeCategory = s.category || 'todos';
+
+                const searchEl = document.getElementById('search-op');
+                const statusEl = document.getElementById('filter-status');
+                if (searchEl) searchEl.value = s.search || '';
+                if (statusEl) statusEl.value = s.status || 'activas';
+                syncCategoryTabs(activeCategory);
+
+                // Construir params y hacer fetch (sin pushState, ya estamos en el estado correcto)
+                const params = { search: s.search || '', status: s.status || 'activas', category: activeCategory, page: s.page || 1 };
+                lastFilterParams = params;
+                const queryString = new URLSearchParams(params).toString();
+                const url = `${ADMIN_URL}?${queryString}`;
+
+                showListadoLoader();
+                fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } })
+                    .then(r => r.json())
+                    .then(data => {
+                        const container = document.getElementById('op-listado-container');
+                        if (container) container.innerHTML = data.html;
+                        syncCategoryTabs(activeCategory);
+                        if (data.ordenes) allOrders = data.ordenes;
+                        updateKpisDOM(data.kpis);
+                        hideListadoLoader();
+                    })
+                    .catch(() => { hideListadoLoader(); });
+            } else {
+                // Sin estado = carga inicial, recargar la página para obtener estado server-side
+                window.location.reload();
+            }
+        });
+
+        // 5. Guardar el estado inicial en el historial para que el primer popstate funcione
+        (function saveInitialState() {
+            const url = new URL(window.location.href);
+            const initialState = {
+                search:   url.searchParams.get('search')   || '',
+                status:   url.searchParams.get('status')   || 'activas',
+                category: url.searchParams.get('category') || activeCategory,
+                page:     url.searchParams.get('page')     || 1,
+            };
+            history.replaceState(initialState, '', window.location.href);
+        })();
+    });
+
+
 
     function selectOrder(id) {
         const order = allOrders.find(o => o.id === id);
