@@ -1429,32 +1429,34 @@ class OrdenProduccionController extends Controller
     public function descargarBrief($id)
     {
         $orden = OrdenProduccion::findOrFail($id);
-        
+
         if (!$orden->brief) {
             abort(404, 'Esta orden no tiene un brief adjunto.');
         }
-        
+
         $filePath = $orden->brief; // e.g., briefs/xyz.jpg
-        
+
         if (!Storage::disk('public')->exists($filePath)) {
-            abort(404, 'El archivo del brief no existe físicamente en el servidor.');
+            abort(404, 'El archivo del brief no existe en el servidor.');
         }
-        
-        $absolutePath = Storage::disk('public')->path($filePath);
-        $extension = strtolower(pathinfo($absolutePath, PATHINFO_EXTENSION));
-        
-        $mimeType = mime_content_type($absolutePath);
-        
-        $inlineExtensions = ['pdf', 'jpg', 'jpeg', 'png'];
-        
-        if (in_array($extension, $inlineExtensions)) {
-            return response()->file($absolutePath, [
-                'Content-Type' => $mimeType,
-                'Content-Disposition' => 'inline; filename="' . basename($absolutePath) . '"'
-            ]);
-        } else {
-            return response()->download($absolutePath, basename($absolutePath));
-        }
+
+        $fileContent  = Storage::disk('public')->get($filePath);
+        $fileName     = basename($filePath);
+        $extension    = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+
+        // Detect MIME type from content (no local path required)
+        $finfo    = new \finfo(FILEINFO_MIME_TYPE);
+        $mimeType = $finfo->buffer($fileContent) ?: 'application/octet-stream';
+
+        $inlineExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'];
+        $disposition = in_array($extension, $inlineExtensions) ? 'inline' : 'attachment';
+
+        return response($fileContent, 200, [
+            'Content-Type'        => $mimeType,
+            'Content-Length'      => strlen($fileContent),
+            'Content-Disposition' => $disposition . '; filename="' . $fileName . '"',
+            'Cache-Control'       => 'private, no-cache, no-store, must-revalidate',
+        ]);
     }
 
     /**
@@ -1985,27 +1987,30 @@ class OrdenProduccionController extends Controller
      */
     public function descargarArchivo($id)
     {
-        $archivo = OrdenProduccionArchivo::findOrFail($id);
+        $archivo  = OrdenProduccionArchivo::findOrFail($id);
         $filePath = $archivo->file_path;
-        
+
         if (!Storage::disk('public')->exists($filePath)) {
-            abort(404, 'El archivo no existe físicamente en el servidor.');
+            abort(404, 'El archivo no existe en el servidor. Puede que haya sido eliminado o que el servidor haya sido reiniciado.');
         }
-        
-        $absolutePath = Storage::disk('public')->path($filePath);
-        $extension = strtolower(pathinfo($absolutePath, PATHINFO_EXTENSION));
-        $mimeType = mime_content_type($absolutePath);
-        
+
+        $fileContent = Storage::disk('public')->get($filePath);
+        $fileName    = $archivo->file_name ?: basename($filePath);
+        $extension   = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+
+        // Detect MIME type from content (no local path required)
+        $finfo    = new \finfo(FILEINFO_MIME_TYPE);
+        $mimeType = $finfo->buffer($fileContent) ?: 'application/octet-stream';
+
         $inlineExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'];
-        
-        if (in_array($extension, $inlineExtensions)) {
-            return response()->file($absolutePath, [
-                'Content-Type' => $mimeType,
-                'Content-Disposition' => 'inline; filename="' . $archivo->file_name . '"'
-            ]);
-        } else {
-            return response()->download($absolutePath, $archivo->file_name);
-        }
+        $disposition = in_array($extension, $inlineExtensions) ? 'inline' : 'attachment';
+
+        return response($fileContent, 200, [
+            'Content-Type'        => $mimeType,
+            'Content-Length'      => strlen($fileContent),
+            'Content-Disposition' => $disposition . '; filename="' . $fileName . '"',
+            'Cache-Control'       => 'private, no-cache, no-store, must-revalidate',
+        ]);
     }
 
     /**
