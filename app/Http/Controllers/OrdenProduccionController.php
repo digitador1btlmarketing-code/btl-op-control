@@ -155,11 +155,17 @@ class OrdenProduccionController extends Controller
     /**
      * Display the admin production control panel.
      */
-    public function admin()
+    public function admin(Request $request)
     {
         $userRole = session('user_role');
-        $query = OrdenProduccion::with(['solicitudPendiente', 'archivos', 'reprocesos', 'solicitudesReproceso']);
+        
+        $search = $request->input('search');
+        $status = $request->input('status', 'activas');
+        $category = $request->input('category', 'todos');
 
+        $query = OrdenProduccion::with(['solicitudPendiente', 'archivos', 'reprocesos', 'solicitudesReproceso', 'original', 'parent']);
+
+        // Role-based category restriction
         if ($userRole === 'admin_branding') {
             $query->where(function ($q) {
                 $q->where('categoria', 'Branding')
@@ -170,6 +176,14 @@ class OrdenProduccionController extends Controller
                           });
                   });
             });
+            if ($category === 'todos') {
+            } elseif ($category === 'Branding') {
+                $query->where('categoria', 'Branding');
+            } elseif ($category === 'Reprocesos') {
+                $query->whereIn('categoria', ['Reprocesos', 'REPROCESO', 'reproceso']);
+            } else {
+                $query->where('id', 0);
+            }
         } elseif ($userRole === 'admin_promo') {
             $query->where(function ($q) {
                 $q->where('categoria', 'Promocional')
@@ -180,11 +194,43 @@ class OrdenProduccionController extends Controller
                           });
                   });
             });
+            if ($category === 'todos') {
+            } elseif ($category === 'Promocional') {
+                $query->where('categoria', 'Promocional');
+            } elseif ($category === 'Reprocesos') {
+                $query->whereIn('categoria', ['Reprocesos', 'REPROCESO', 'reproceso']);
+            } else {
+                $query->where('id', 0);
+            }
+        } else {
+            if ($category && $category !== 'todos') {
+                if ($category === 'Reprocesos') {
+                    $query->whereIn('categoria', ['Reprocesos', 'REPROCESO', 'reproceso']);
+                } else {
+                    $query->where('categoria', $category);
+                }
+            }
         }
+
+        // Apply filters
+        if ($search) {
+            $query->where('numero_op', 'ilike', '%' . $search . '%');
+        }
+
+        if ($status && $status !== 'todos') {
+            if ($status === 'activas') {
+                $query->whereIn('estado', ['Pendiente', 'En proceso', 'En espera']);
+            } else {
+                $query->where('estado', $status);
+            }
+        }
+
+        $kpiQuery = $query->clone();
 
         $ordenes = $query->orderBy('fecha_entrega', 'asc')
             ->orderBy('hora_entrega', 'asc')
-            ->get();
+            ->paginate(20)
+            ->withQueryString();
 
         $solicitudes = SolicitudCambioFecha::with('ordenProduccion')
             ->where('estado_solicitud', 'Pendiente')
@@ -207,26 +253,38 @@ class OrdenProduccionController extends Controller
 
         $solicitudesReproceso = $solicitudesReprocesoQuery->get();
 
-        $kpis = \Illuminate\Support\Facades\Cache::remember("dashboard_stats_{$userRole}", 60, function () use ($ordenes, $solicitudes, $solicitudesReproceso) {
-            return [
-                'total' => $ordenes->count(),
-                'pendientes' => $ordenes->where('estado', 'Pendiente')->count(),
-                'en_proceso' => $ordenes->where('estado', 'En proceso')->count(),
-                'terminadas' => $ordenes->where('estado', 'Terminado')->count(),
-                'en_espera' => $ordenes->where('estado', 'En espera')->count(),
-                'urgentes' => $ordenes->filter(fn($o) => $o->prioridad === 'URGENTE')->count(),
-                'solicitudes_pendientes' => $solicitudes->count() + $solicitudesReproceso->count(),
-            ];
-        });
+        $statusCounts = $kpiQuery->clone()
+            ->select('estado', \Illuminate\Support\Facades\DB::raw('count(*) as total'))
+            ->groupBy('estado')
+            ->pluck('total', 'estado')
+            ->all();
+
+        $urgentesCount = $kpiQuery->clone()
+            ->whereNotIn('estado', ['Terminado', 'Cancelado'])
+            ->where('fecha_entrega', '<=', now()->format('Y-m-d'))
+            ->count();
+
+        $totalCount = array_sum($statusCounts);
+
+        $kpis = [
+            'total' => $totalCount,
+            'pendientes' => $statusCounts['Pendiente'] ?? 0,
+            'en_proceso' => $statusCounts['En proceso'] ?? 0,
+            'terminadas' => $statusCounts['Terminado'] ?? 0,
+            'en_espera' => $statusCounts['En espera'] ?? 0,
+            'urgentes' => $urgentesCount,
+            'solicitudes_pendientes' => $solicitudes->count() + $solicitudesReproceso->count(),
+        ];
 
         // Fetch all users for Master Admin user management panel
         $usuarios = [];
         if ($userRole === 'admin') {
-            $usuarios = UsuarioAcceso::orderBy('rol', 'asc')
+            $usuarios = UsuarioAcceso::withCount('ordenes')
+                ->orderBy('rol', 'asc')
                 ->orderBy('nombre', 'asc')
                 ->get()
                 ->map(function ($u) {
-                    $u->op_count = OrdenProduccion::where('creado_por_codigo', $u->codigo)->count();
+                    $u->op_count = $u->ordenes_count;
                     return $u;
                 });
         }
@@ -390,10 +448,15 @@ class OrdenProduccionController extends Controller
     /**
      * Get real-time JSON updates for the Admin panel.
      */
-    public function adminUpdates()
+    public function adminUpdates(Request $request)
     {
         $userRole = session('user_role');
-        $query = OrdenProduccion::with(['solicitudPendiente', 'archivos', 'reprocesos', 'solicitudesReproceso']);
+        
+        $search = $request->input('search');
+        $status = $request->input('status', 'activas');
+        $category = $request->input('category', 'todos');
+
+        $query = OrdenProduccion::with(['solicitudPendiente', 'archivos', 'reprocesos', 'solicitudesReproceso', 'original', 'parent']);
 
         if ($userRole === 'admin_branding') {
             $query->where(function ($q) {
@@ -405,6 +468,14 @@ class OrdenProduccionController extends Controller
                           });
                   });
             });
+            if ($category === 'todos') {
+            } elseif ($category === 'Branding') {
+                $query->where('categoria', 'Branding');
+            } elseif ($category === 'Reprocesos') {
+                $query->whereIn('categoria', ['Reprocesos', 'REPROCESO', 'reproceso']);
+            } else {
+                $query->where('id', 0);
+            }
         } elseif ($userRole === 'admin_promo') {
             $query->where(function ($q) {
                 $q->where('categoria', 'Promocional')
@@ -415,15 +486,46 @@ class OrdenProduccionController extends Controller
                           });
                   });
             });
+            if ($category === 'todos') {
+            } elseif ($category === 'Promocional') {
+                $query->where('categoria', 'Promocional');
+            } elseif ($category === 'Reprocesos') {
+                $query->whereIn('categoria', ['Reprocesos', 'REPROCESO', 'reproceso']);
+            } else {
+                $query->where('id', 0);
+            }
+        } else {
+            if ($category && $category !== 'todos') {
+                if ($category === 'Reprocesos') {
+                    $query->whereIn('categoria', ['Reprocesos', 'REPROCESO', 'reproceso']);
+                } else {
+                    $query->where('categoria', $category);
+                }
+            }
         }
+
+        if ($search) {
+            $query->where('numero_op', 'ilike', '%' . $search . '%');
+        }
+
+        if ($status && $status !== 'todos') {
+            if ($status === 'activas') {
+                $query->whereIn('estado', ['Pendiente', 'En proceso', 'En espera']);
+            } else {
+                $query->where('estado', $status);
+            }
+        }
+
+        $kpiQuery = $query->clone();
 
         $ordenes = $query->orderBy('fecha_entrega', 'asc')
             ->orderBy('hora_entrega', 'asc')
-            ->get();
+            ->paginate(20)
+            ->items();
 
-        $ordenes->each(function ($o) {
+        foreach ($ordenes as $o) {
             $o->append(['dias_restantes', 'prioridad', 'mostrar_fuego']);
-        });
+        }
 
         $solicitudes = SolicitudCambioFecha::with('ordenProduccion')
             ->where('estado_solicitud', 'Pending')
@@ -447,17 +549,28 @@ class OrdenProduccionController extends Controller
 
         $solicitudesReproceso = $solicitudesReprocesoQuery->get();
 
-        $kpis = \Illuminate\Support\Facades\Cache::remember("dashboard_stats_{$userRole}", 60, function () use ($ordenes, $solicitudes, $solicitudesReproceso) {
-            return [
-                'total' => $ordenes->count(),
-                'pendientes' => $ordenes->where('estado', 'Pendiente')->count(),
-                'en_proceso' => $ordenes->where('estado', 'En proceso')->count(),
-                'terminadas' => $ordenes->where('estado', 'Terminado')->count(),
-                'en_espera' => $ordenes->where('estado', 'En espera')->count(),
-                'urgentes' => $ordenes->filter(fn($o) => $o->prioridad === 'URGENTE')->count(),
-                'solicitudes_pendientes' => $solicitudes->count() + $solicitudesReproceso->count(),
-            ];
-        });
+        $statusCounts = $kpiQuery->clone()
+            ->select('estado', \Illuminate\Support\Facades\DB::raw('count(*) as total'))
+            ->groupBy('estado')
+            ->pluck('total', 'estado')
+            ->all();
+
+        $urgentesCount = $kpiQuery->clone()
+            ->whereNotIn('estado', ['Terminado', 'Cancelado'])
+            ->where('fecha_entrega', '<=', now()->format('Y-m-d'))
+            ->count();
+
+        $totalCount = array_sum($statusCounts);
+
+        $kpis = [
+            'total' => $totalCount,
+            'pendientes' => $statusCounts['Pendiente'] ?? 0,
+            'en_proceso' => $statusCounts['En proceso'] ?? 0,
+            'terminadas' => $statusCounts['Terminado'] ?? 0,
+            'en_espera' => $statusCounts['En espera'] ?? 0,
+            'urgentes' => $urgentesCount,
+            'solicitudes_pendientes' => $solicitudes->count() + $solicitudesReproceso->count(),
+        ];
 
         // Fetch requests resolved in the last 5 minutes (filtered by admin category)
         $recentResolutionsQuery = SolicitudCambioFecha::with('ordenProduccion')
@@ -529,10 +642,15 @@ class OrdenProduccionController extends Controller
     /**
      * Display Vendedor Panel.
      */
-    public function misOrdenes()
+    public function misOrdenes(Request $request)
     {
         $vendedorCodigo = session('user_code');
-        $ordenes = OrdenProduccion::with(['archivos', 'reprocesos', 'solicitudesReproceso'])
+        
+        $search = $request->input('search');
+        $status = $request->input('status', 'activas');
+        $category = $request->input('category', 'todos');
+
+        $query = OrdenProduccion::with(['archivos', 'reprocesos', 'solicitudesReproceso', 'original', 'parent', 'solicitudPendiente'])
             ->where(function($q) use ($vendedorCodigo) {
                 $q->where('creado_por_codigo', $vendedorCodigo)
                   ->orWhere(function($sub) use ($vendedorCodigo) {
@@ -541,12 +659,33 @@ class OrdenProduccionController extends Controller
                               $o->where('creado_por_codigo', $vendedorCodigo);
                           });
                   });
-            })
-            ->orderBy('fecha_entrega', 'asc')
+            });
+
+        // Apply filters
+        if ($search) {
+            $query->where('numero_op', 'ilike', '%' . $search . '%');
+        }
+
+        if ($status && $status !== 'todos') {
+            if ($status === 'activas') {
+                $query->whereIn('estado', ['Pendiente', 'En proceso', 'En espera']);
+            } else {
+                $query->where('estado', $status);
+            }
+        }
+
+        if ($category && $category !== 'todos') {
+            if ($category === 'Reprocesos') {
+                $query->whereIn('categoria', ['Reprocesos', 'REPROCESO', 'reproceso']);
+            } else {
+                $query->where('categoria', $category);
+            }
+        }
+
+        $ordenes = $query->orderBy('fecha_entrega', 'asc')
             ->orderBy('hora_entrega', 'asc')
-            ->get();
-            
-        $ordenes->load('solicitudPendiente');
+            ->paginate(20)
+            ->withQueryString();
 
         $solicitudes = SolicitudCambioFecha::with('ordenProduccion')
             ->where('estado_solicitud', 'Pendiente')
@@ -560,10 +699,15 @@ class OrdenProduccionController extends Controller
     /**
      * Polling updates for Vendedor Panel.
      */
-    public function misOrdenesUpdates()
+    public function misOrdenesUpdates(Request $request)
     {
         $vendedorCodigo = session('user_code');
-        $ordenes = OrdenProduccion::with(['archivos', 'reprocesos', 'solicitudesReproceso'])
+        
+        $search = $request->input('search');
+        $status = $request->input('status', 'activas');
+        $category = $request->input('category', 'todos');
+
+        $query = OrdenProduccion::with(['archivos', 'reprocesos', 'solicitudesReproceso', 'original', 'parent', 'solicitudPendiente'])
             ->where(function($q) use ($vendedorCodigo) {
                 $q->where('creado_por_codigo', $vendedorCodigo)
                   ->orWhere(function($sub) use ($vendedorCodigo) {
@@ -572,15 +716,37 @@ class OrdenProduccionController extends Controller
                               $o->where('creado_por_codigo', $vendedorCodigo);
                           });
                   });
-            })
-            ->orderBy('fecha_entrega', 'asc')
+            });
+
+        // Apply filters
+        if ($search) {
+            $query->where('numero_op', 'ilike', '%' . $search . '%');
+        }
+
+        if ($status && $status !== 'todos') {
+            if ($status === 'activas') {
+                $query->whereIn('estado', ['Pendiente', 'En proceso', 'En espera']);
+            } else {
+                $query->where('estado', $status);
+            }
+        }
+
+        if ($category && $category !== 'todos') {
+            if ($category === 'Reprocesos') {
+                $query->whereIn('categoria', ['Reprocesos', 'REPROCESO', 'reproceso']);
+            } else {
+                $query->where('categoria', $category);
+            }
+        }
+
+        $ordenes = $query->orderBy('fecha_entrega', 'asc')
             ->orderBy('hora_entrega', 'asc')
-            ->get();
-            
-        $ordenes->load('solicitudPendiente');
-        $ordenes->each(function ($o) {
+            ->paginate(20)
+            ->items();
+        
+        foreach ($ordenes as $o) {
             $o->append(['dias_restantes', 'prioridad', 'mostrar_fuego']);
-        });
+        }
 
         $solicitudes = SolicitudCambioFecha::with('ordenProduccion')
             ->where('estado_solicitud', 'Pendiente')
@@ -598,12 +764,16 @@ class OrdenProduccionController extends Controller
     /**
      * Display Jefe de Ventas Panel.
      */
-    public function jefeVentasPanel()
+    public function jefeVentasPanel(Request $request)
     {
         $jefeCodigo = session('user_code');
+        
+        $search = $request->input('search');
+        $status = $request->input('status', 'activas');
+        $category = $request->input('category', 'todos');
 
         // Filter OPs: created by vendors belonging to this jefe or by the jefe itself
-        $ordenes = OrdenProduccion::with(['archivos', 'reprocesos', 'solicitudesReproceso'])->where(function ($query) use ($jefeCodigo) {
+        $query = OrdenProduccion::with(['archivos', 'reprocesos', 'solicitudesReproceso', 'original', 'parent', 'solicitudPendiente'])->where(function ($query) use ($jefeCodigo) {
             $query->where(function ($q) use ($jefeCodigo) {
                 $q->whereIn('creado_por_codigo', function ($sub) use ($jefeCodigo) {
                     $sub->select('codigo')
@@ -625,35 +795,67 @@ class OrdenProduccionController extends Controller
                         });
                     });
             });
-        })
-        ->orderBy('fecha_entrega', 'asc')
-        ->orderBy('hora_entrega', 'asc')
-        ->get();
-        $ordenes->load('solicitudPendiente');
+        });
 
-        // Solicitudes filter: using unified canApproveOrRejectSolicitud helper
+        // Apply filters
+        if ($search) {
+            $query->where('numero_op', 'ilike', '%' . $search . '%');
+        }
+
+        if ($status && $status !== 'todos') {
+            if ($status === 'activas') {
+                $query->whereIn('estado', ['Pendiente', 'En proceso', 'En espera']);
+            } else {
+                $query->where('estado', $status);
+            }
+        }
+
+        if ($category && $category !== 'todos') {
+            if ($category === 'Reprocesos') {
+                $query->whereIn('categoria', ['Reprocesos', 'REPROCESO', 'reproceso']);
+            } else {
+                $query->where('categoria', $category);
+            }
+        }
+
+        $kpiQuery = $query->clone();
+
+        $ordenes = $query->orderBy('fecha_entrega', 'asc')
+            ->orderBy('hora_entrega', 'asc')
+            ->paginate(20)
+            ->withQueryString();
+
         $solicitudes = SolicitudCambioFecha::with('ordenProduccion')
             ->where('estado_solicitud', 'Pendiente')
             ->get()
             ->filter(fn($sol) => $this->canApproveOrRejectSolicitud($sol))
             ->values();
 
+        $statusCounts = $kpiQuery->clone()
+            ->select('estado', \Illuminate\Support\Facades\DB::raw('count(*) as total'))
+            ->groupBy('estado')
+            ->pluck('total', 'estado')
+            ->all();
+
+        $totalCount = array_sum($statusCounts);
+
         $kpis = [
-            'total' => $ordenes->count(),
-            'pendientes' => $ordenes->where('estado', 'Pendiente')->count(),
-            'en_proceso' => $ordenes->where('estado', 'En proceso')->count(),
-            'terminadas' => $ordenes->where('estado', 'Terminado')->count(),
-            'en_espera' => $ordenes->where('estado', 'En espera')->count(),
+            'total' => $totalCount,
+            'pendientes' => $statusCounts['Pendiente'] ?? 0,
+            'en_proceso' => $statusCounts['En proceso'] ?? 0,
+            'terminadas' => $statusCounts['Terminado'] ?? 0,
+            'en_espera' => $statusCounts['En espera'] ?? 0,
             'solicitudes_pendientes' => $solicitudes->count(),
         ];
 
         // Filter vendors belonging to this jefe
         $usuarios = UsuarioAcceso::where('rol', 'ventas')
             ->where('jefe_codigo', $jefeCodigo)
+            ->withCount('ordenes')
             ->orderBy('nombre', 'asc')
             ->get()
             ->map(function ($u) {
-                $u->op_count = OrdenProduccion::where('creado_por_codigo', $u->codigo)->count();
+                $u->op_count = $u->ordenes_count;
                 return $u;
             });
 
@@ -663,11 +865,15 @@ class OrdenProduccionController extends Controller
     /**
      * Polling updates for Jefe de Ventas Panel.
      */
-    public function jefeVentasUpdates()
+    public function jefeVentasUpdates(Request $request)
     {
         $jefeCodigo = session('user_code');
+        
+        $search = $request->input('search');
+        $status = $request->input('status', 'activas');
+        $category = $request->input('category', 'todos');
 
-        $ordenes = OrdenProduccion::with(['archivos', 'reprocesos', 'solicitudesReproceso'])->where(function ($query) use ($jefeCodigo) {
+        $query = OrdenProduccion::with(['archivos', 'reprocesos', 'solicitudesReproceso', 'original', 'parent', 'solicitudPendiente'])->where(function ($query) use ($jefeCodigo) {
             $query->where(function ($q) use ($jefeCodigo) {
                 $q->whereIn('creado_por_codigo', function ($sub) use ($jefeCodigo) {
                     $sub->select('codigo')
@@ -689,16 +895,39 @@ class OrdenProduccionController extends Controller
                         });
                     });
             });
-        })
-        ->orderBy('fecha_entrega', 'asc')
-        ->orderBy('hora_entrega', 'asc')
-        ->get();
-        
-        $ordenes->load('solicitudPendiente');
-            
-        $ordenes->each(function ($o) {
-            $o->append(['dias_restantes', 'prioridad', 'mostrar_fuego']);
         });
+
+        // Apply filters
+        if ($search) {
+            $query->where('numero_op', 'ilike', '%' . $search . '%');
+        }
+
+        if ($status && $status !== 'todos') {
+            if ($status === 'activas') {
+                $query->whereIn('estado', ['Pendiente', 'En proceso', 'En espera']);
+            } else {
+                $query->where('estado', $status);
+            }
+        }
+
+        if ($category && $category !== 'todos') {
+            if ($category === 'Reprocesos') {
+                $query->whereIn('categoria', ['Reprocesos', 'REPROCESO', 'reproceso']);
+            } else {
+                $query->where('categoria', $category);
+            }
+        }
+
+        $kpiQuery = $query->clone();
+
+        $ordenes = $query->orderBy('fecha_entrega', 'asc')
+            ->orderBy('hora_entrega', 'asc')
+            ->paginate(20)
+            ->items();
+        
+        foreach ($ordenes as $o) {
+            $o->append(['dias_restantes', 'prioridad', 'mostrar_fuego']);
+        }
 
         $solicitudes = SolicitudCambioFecha::with('ordenProduccion')
             ->where('estado_solicitud', 'Pendiente')
@@ -706,12 +935,20 @@ class OrdenProduccionController extends Controller
             ->filter(fn($sol) => $this->canApproveOrRejectSolicitud($sol))
             ->values();
 
+        $statusCounts = $kpiQuery->clone()
+            ->select('estado', \Illuminate\Support\Facades\DB::raw('count(*) as total'))
+            ->groupBy('estado')
+            ->pluck('total', 'estado')
+            ->all();
+
+        $totalCount = array_sum($statusCounts);
+
         $kpis = [
-            'total' => $ordenes->count(),
-            'pendientes' => $ordenes->where('estado', 'Pendiente')->count(),
-            'en_proceso' => $ordenes->where('estado', 'En proceso')->count(),
-            'terminadas' => $ordenes->where('estado', 'Terminado')->count(),
-            'en_espera' => $ordenes->where('estado', 'En espera')->count(),
+            'total' => $totalCount,
+            'pendientes' => $statusCounts['Pendiente'] ?? 0,
+            'en_proceso' => $statusCounts['En proceso'] ?? 0,
+            'terminadas' => $statusCounts['Terminado'] ?? 0,
+            'en_espera' => $statusCounts['En espera'] ?? 0,
             'solicitudes_pendientes' => $solicitudes->count(),
         ];
 
@@ -1099,7 +1336,12 @@ class OrdenProduccionController extends Controller
             return false;
         }
 
-        $solicitante = UsuarioAcceso::where('codigo', $solicitud->solicitado_por_codigo)->first();
+        static $usuariosCache = null;
+        if ($usuariosCache === null || app()->runningUnitTests()) {
+            $usuariosCache = UsuarioAcceso::all()->keyBy('codigo')->all();
+        }
+
+        $solicitante = $usuariosCache[$solicitud->solicitado_por_codigo] ?? null;
         $solicitanteRol = $solicitante ? $solicitante->rol : 'ventas';
 
         $op = $solicitud->ordenProduccion;
@@ -1119,9 +1361,8 @@ class OrdenProduccionController extends Controller
             if ($userRole === 'ventas' && $op->creado_por_codigo === $userCode) {
                 return true;
             } elseif ($userRole === 'jefe_ventas') {
-                $isCreatorVendorOfJefe = UsuarioAcceso::where('codigo', $op->creado_por_codigo)
-                    ->where('jefe_codigo', $userCode)
-                    ->exists();
+                $creator = $usuariosCache[$op->creado_por_codigo] ?? null;
+                $isCreatorVendorOfJefe = $creator && $creator->jefe_codigo === $userCode;
                 if ($op->creado_por_codigo === $userCode || $op->creado_por_codigo === 'ADMIN-PROD-2026' || $isCreatorVendorOfJefe) {
                     return true;
                 }
@@ -1606,20 +1847,64 @@ class OrdenProduccionController extends Controller
     /**
      * Display the Vista panel (solo lectura).
      */
-    public function vistaPanel()
+    /**
+     * Display the Vista panel (solo lectura).
+     */
+    public function vistaPanel(Request $request)
     {
-        $ordenes = OrdenProduccion::with(['archivos', 'reprocesos', 'solicitudesReproceso'])
-            ->orderBy('fecha_entrega', 'asc')
+        $search = $request->input('search');
+        $status = $request->input('status', 'activas');
+        $category = $request->input('category', 'todos');
+
+        $query = OrdenProduccion::with(['archivos', 'reprocesos', 'solicitudesReproceso', 'original', 'parent']);
+
+        if ($search) {
+            $query->where('numero_op', 'ilike', '%' . $search . '%');
+        }
+
+        if ($status && $status !== 'todos') {
+            if ($status === 'activas') {
+                $query->whereIn('estado', ['Pendiente', 'En proceso', 'En espera']);
+            } else {
+                $query->where('estado', $status);
+            }
+        }
+
+        if ($category && $category !== 'todos') {
+            if ($category === 'Reprocesos') {
+                $query->whereIn('categoria', ['Reprocesos', 'REPROCESO', 'reproceso']);
+            } else {
+                $query->where('categoria', $category);
+            }
+        }
+
+        $kpiQuery = $query->clone();
+
+        $ordenes = $query->orderBy('fecha_entrega', 'asc')
             ->orderBy('hora_entrega', 'asc')
-            ->get();
+            ->paginate(20)
+            ->withQueryString();
+
+        $statusCounts = $kpiQuery->clone()
+            ->select('estado', \Illuminate\Support\Facades\DB::raw('count(*) as total'))
+            ->groupBy('estado')
+            ->pluck('total', 'estado')
+            ->all();
+
+        $urgentesCount = $kpiQuery->clone()
+            ->whereNotIn('estado', ['Terminado', 'Cancelado'])
+            ->where('fecha_entrega', '<=', now()->format('Y-m-d'))
+            ->count();
+
+        $totalCount = array_sum($statusCounts);
 
         $kpis = [
-            'total' => $ordenes->count(),
-            'pendientes' => $ordenes->where('estado', 'Pendiente')->count(),
-            'en_proceso' => $ordenes->where('estado', 'En proceso')->count(),
-            'en_espera' => $ordenes->where('estado', 'En espera')->count(),
-            'terminadas' => $ordenes->where('estado', 'Terminado')->count(),
-            'urgentes' => $ordenes->filter(fn($o) => $o->prioridad === 'URGENTE')->count(),
+            'total' => $totalCount,
+            'pendientes' => $statusCounts['Pendiente'] ?? 0,
+            'en_proceso' => $statusCounts['En proceso'] ?? 0,
+            'en_espera' => $statusCounts['En espera'] ?? 0,
+            'terminadas' => $statusCounts['Terminado'] ?? 0,
+            'urgentes' => $urgentesCount,
         ];
 
         return view('op.vista', compact('ordenes', 'kpis'));
@@ -1628,24 +1913,65 @@ class OrdenProduccionController extends Controller
     /**
      * Get updates for the Vista panel.
      */
-    public function vistaUpdates()
+    public function vistaUpdates(Request $request)
     {
-        $ordenes = OrdenProduccion::with(['archivos', 'reprocesos', 'solicitudesReproceso'])
-            ->orderBy('fecha_entrega', 'asc')
-            ->orderBy('hora_entrega', 'asc')
-            ->get();
+        $search = $request->input('search');
+        $status = $request->input('status', 'activas');
+        $category = $request->input('category', 'todos');
 
-        $ordenes->each(function ($o) {
+        $query = OrdenProduccion::with(['archivos', 'reprocesos', 'solicitudesReproceso', 'original', 'parent']);
+
+        if ($search) {
+            $query->where('numero_op', 'ilike', '%' . $search . '%');
+        }
+
+        if ($status && $status !== 'todos') {
+            if ($status === 'activas') {
+                $query->whereIn('estado', ['Pendiente', 'En proceso', 'En espera']);
+            } else {
+                $query->where('estado', $status);
+            }
+        }
+
+        if ($category && $category !== 'todos') {
+            if ($category === 'Reprocesos') {
+                $query->whereIn('categoria', ['Reprocesos', 'REPROCESO', 'reproceso']);
+            } else {
+                $query->where('categoria', $category);
+            }
+        }
+
+        $kpiQuery = $query->clone();
+
+        $ordenes = $query->orderBy('fecha_entrega', 'asc')
+            ->orderBy('hora_entrega', 'asc')
+            ->paginate(20)
+            ->items();
+
+        foreach ($ordenes as $o) {
             $o->append(['dias_restantes', 'prioridad', 'mostrar_fuego']);
-        });
+        }
+
+        $statusCounts = $kpiQuery->clone()
+            ->select('estado', \Illuminate\Support\Facades\DB::raw('count(*) as total'))
+            ->groupBy('estado')
+            ->pluck('total', 'estado')
+            ->all();
+
+        $urgentesCount = $kpiQuery->clone()
+            ->whereNotIn('estado', ['Terminado', 'Cancelado'])
+            ->where('fecha_entrega', '<=', now()->format('Y-m-d'))
+            ->count();
+
+        $totalCount = array_sum($statusCounts);
 
         $kpis = [
-            'total' => $ordenes->count(),
-            'pendientes' => $ordenes->where('estado', 'Pendiente')->count(),
-            'en_proceso' => $ordenes->where('estado', 'En proceso')->count(),
-            'en_espera' => $ordenes->where('estado', 'En espera')->count(),
-            'terminadas' => $ordenes->where('estado', 'Terminado')->count(),
-            'urgentes' => $ordenes->filter(fn($o) => $o->prioridad === 'URGENTE')->count(),
+            'total' => $totalCount,
+            'pendientes' => $statusCounts['Pendiente'] ?? 0,
+            'en_proceso' => $statusCounts['En proceso'] ?? 0,
+            'en_espera' => $statusCounts['En espera'] ?? 0,
+            'terminadas' => $statusCounts['Terminado'] ?? 0,
+            'urgentes' => $urgentesCount,
         ];
 
         return response()->json([

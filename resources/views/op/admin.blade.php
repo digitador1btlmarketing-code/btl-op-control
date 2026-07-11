@@ -243,10 +243,11 @@
                 <input 
                     type="text" 
                     id="search-op" 
-                    placeholder="Buscar por número OP..." 
+                    placeholder="Buscar por número OP (Presione Enter)..." 
                     class="form-control" 
                     style="padding: 8px 12px; font-size: 0.9rem; height: 38px; width: 100%;"
-                    oninput="applyAdminFilters()"
+                    value="{{ request('search') }}"
+                    onkeydown="if(event.key === 'Enter') submitFilters()"
                 >
             </div>
             
@@ -256,15 +257,15 @@
                     id="filter-status" 
                     class="form-control" 
                     style="padding: 8px 12px; font-size: 0.9rem; height: 38px; cursor: pointer; width: 100%;"
-                    onchange="applyAdminFilters()"
+                    onchange="submitFilters()"
                 >
-                    <option value="activas" selected>Todas activas</option>
-                    <option value="Pendiente">Pendientes</option>
-                    <option value="En proceso">En proceso</option>
-                    <option value="En espera">En espera</option>
-                    <option value="Terminado">Terminadas</option>
-                    <option value="Cancelado">Canceladas</option>
-                    <option value="todos">Todas</option>
+                    <option value="activas" {{ request('status', 'activas') === 'activas' ? 'selected' : '' }}>Todas activas</option>
+                    <option value="Pendiente" {{ request('status') === 'Pendiente' ? 'selected' : '' }}>Pendientes</option>
+                    <option value="En proceso" {{ request('status') === 'En proceso' ? 'selected' : '' }}>En proceso</option>
+                    <option value="En espera" {{ request('status') === 'En espera' ? 'selected' : '' }}>En espera</option>
+                    <option value="Terminado" {{ request('status') === 'Terminado' ? 'selected' : '' }}>Terminadas</option>
+                    <option value="Cancelado" {{ request('status') === 'Cancelado' ? 'selected' : '' }}>Canceladas</option>
+                    <option value="todos" {{ request('status') === 'todos' ? 'selected' : '' }}>Todas</option>
                 </select>
             </div>
         </div>
@@ -272,11 +273,15 @@
     
     <!-- Category Tabs -->
     @if(in_array(session('user_role'), ['admin', 'admin_branding', 'admin_promo']))
+    @php
+        $defaultCat = session('user_role') === 'admin_branding' ? 'Branding' : (session('user_role') === 'admin_promo' ? 'Promocional' : 'todos');
+        $activeCat = request('category', $defaultCat);
+    @endphp
     <div class="category-tabs-container">
-        <button class="category-tab active" data-category="todos" onclick="selectCategoryTab('todos')">Todas</button>
-        <button class="category-tab" data-category="Branding" onclick="selectCategoryTab('Branding')">Branding</button>
-        <button class="category-tab" data-category="Promocional" onclick="selectCategoryTab('Promocional')">Promocional</button>
-        <button class="category-tab" data-category="Reprocesos" onclick="selectCategoryTab('Reprocesos')">Reprocesos</button>
+        <button class="category-tab {{ $activeCat === 'todos' ? 'active' : '' }}" data-category="todos" onclick="selectCategoryTab('todos')">Todas</button>
+        <button class="category-tab {{ $activeCat === 'Branding' ? 'active' : '' }}" data-category="Branding" onclick="selectCategoryTab('Branding')">Branding</button>
+        <button class="category-tab {{ $activeCat === 'Promocional' ? 'active' : '' }}" data-category="Promocional" onclick="selectCategoryTab('Promocional')">Promocional</button>
+        <button class="category-tab {{ $activeCat === 'Reprocesos' ? 'active' : '' }}" data-category="Reprocesos" onclick="selectCategoryTab('Reprocesos')">Reprocesos</button>
     </div>
     @endif
     
@@ -396,6 +401,25 @@
             </tbody>
         </table>
     </div>
+
+    <!-- Paginación -->
+    @if($ordenes->hasPages())
+        <div class="pagination-container" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px; padding: 10px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-glass); border-radius: 8px;">
+            @if($ordenes->onFirstPage())
+                <span style="opacity: 0.5; pointer-events: none; padding: 6px 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); border-radius: 6px; color: var(--text-muted); font-size: 0.85rem;">« Anterior</span>
+            @else
+                <a href="{{ $ordenes->appends(request()->query())->previousPageUrl() }}" class="btn-save-inline" style="padding: 6px 12px; background: rgba(0, 210, 255, 0.1); border: 1px solid rgba(0, 210, 255, 0.25); border-radius: 6px; color: var(--blue-bright); text-decoration: none; font-size: 0.85rem;">« Anterior</a>
+            @endif
+
+            <span style="color: var(--text-muted); font-size: 0.85rem; font-weight: 600;">Página {{ $ordenes->currentPage() }} de {{ $ordenes->lastPage() }}</span>
+
+            @if($ordenes->hasMorePages())
+                <a href="{{ $ordenes->appends(request()->query())->nextPageUrl() }}" class="btn-save-inline" style="padding: 6px 12px; background: rgba(0, 210, 255, 0.1); border: 1px solid rgba(0, 210, 255, 0.25); border-radius: 6px; color: var(--blue-bright); text-decoration: none; font-size: 0.85rem;">Siguiente »</a>
+            @else
+                <span style="opacity: 0.5; pointer-events: none; padding: 6px 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); border-radius: 6px; color: var(--text-muted); font-size: 0.85rem;">Siguiente »</span>
+            @endif
+        </div>
+    @endif
 </div>
 
 <!-- Panel de Detalle de Orden Seleccionada -->
@@ -981,9 +1005,9 @@
 <script>
     const loggedInUserCode = "{{ session('user_code') }}";
     const loggedInUserRole = "{{ session('user_role') }}";
-    let activeCategory = '{{ session('user_role') === 'admin_branding' ? 'Branding' : (session('user_role') === 'admin_promo' ? 'Promocional' : 'todos') }}';
+    let activeCategory = '{{ request('category') ?: (session('user_role') === 'admin_branding' ? 'Branding' : (session('user_role') === 'admin_promo' ? 'Promocional' : 'todos')) }}';
     let selectedOrderId = null;
-    let allOrders = @json($ordenes);
+    let allOrders = @json($ordenes->items());
     const storageBaseUrl = "/storage";
     let notifiedResolutions = new Set();
 
@@ -999,92 +1023,20 @@
             }
         });
         
-        applyAdminFilters();
+        submitFilters();
+    }
+
+    function submitFilters() {
+        const searchVal = document.getElementById('search-op').value.trim();
+        const filterVal = document.getElementById('filter-status').value;
+        const categoryVal = activeCategory;
+        
+        window.location.href = `{{ route('op.admin') }}?search=${encodeURIComponent(searchVal)}&status=${encodeURIComponent(filterVal)}&category=${encodeURIComponent(categoryVal)}`;
     }
 
     function applyAdminFilters() {
-        const searchVal = document.getElementById('search-op').value.toLowerCase().trim();
-        const filterVal = document.getElementById('filter-status').value;
-        const rows = document.querySelectorAll('.admin-row');
-        
-        let totalCount = 0;
-        let pendienteCount = 0;
-        let procesoCount = 0;
-        let terminadoCount = 0;
-        let esperaCount = 0;
-        let urgenteCount = 0;
-        let visibleCount = 0;
-
-        rows.forEach(row => {
-            const estado = row.getAttribute('data-estado');
-            const prioridad = row.getAttribute('data-prioridad');
-            const numeroOp = row.getAttribute('data-numero-op').toLowerCase();
-            const categoria = row.getAttribute('data-categoria');
-
-            // Category filter logic
-            let matchesCategory = true;
-            if (activeCategory !== 'todos') {
-                matchesCategory = (categoria === activeCategory);
-            }
-
-            // Status filter logic
-            let matchesFilter = false;
-            if (filterVal === 'activas') {
-                matchesFilter = (estado === 'Pendiente' || estado === 'En proceso' || estado === 'En espera');
-            } else if (filterVal === 'todos') {
-                matchesFilter = true;
-            } else {
-                matchesFilter = (estado === filterVal);
-            }
-
-            // Search by OP number logic
-            let matchesSearch = true;
-            if (searchVal) {
-                matchesSearch = numeroOp.includes(searchVal);
-            }
-
-            if (matchesCategory && matchesFilter && matchesSearch) {
-                row.style.display = '';
-                visibleCount++;
-                
-                // Aggregate counts for only matching rows
-                totalCount++;
-                if (estado === 'Pendiente') pendienteCount++;
-                if (estado === 'En proceso') procesoCount++;
-                if (estado === 'Terminado') terminadoCount++;
-                if (estado === 'En espera') esperaCount++;
-                if (prioridad === 'URGENTE') urgenteCount++;
-            } else {
-                row.style.display = 'none';
-            }
-        });
-
-        // Toggle empty message row
-        if (rows.length > 0) {
-            if (visibleCount === 0) {
-                if (!document.getElementById('no-results-row')) {
-                    const tbody = document.getElementById('admin-table-body');
-                    const tr = document.createElement('tr');
-                    tr.id = 'no-results-row';
-                    tr.innerHTML = `<td colspan="10" style="text-align: center; color: var(--text-muted); padding: 40px;">No se encontraron órdenes con los filtros seleccionados.</td>`;
-                    tbody.appendChild(tr);
-                }
-            } else {
-                const noResults = document.getElementById('no-results-row');
-                if (noResults) noResults.remove();
-            }
-        } else {
-            const noResults = document.getElementById('no-results-row');
-            if (noResults) noResults.remove();
-        }
-
-        // Update top KPIs grid values
-        document.getElementById('kpi-total').textContent = totalCount;
-        document.getElementById('kpi-pendientes').textContent = pendienteCount;
-        document.getElementById('kpi-en-proceso').textContent = procesoCount;
-        document.getElementById('kpi-en-espera').textContent = esperaCount;
-        document.getElementById('kpi-terminadas').textContent = terminadoCount;
-        document.getElementById('kpi-urgentes').textContent = urgenteCount;
+        // Passive function to prevent breaking old callbacks.
+        // Server side pagination/filtering takes care of state.
     }
 
     function selectOrder(id) {
@@ -1600,7 +1552,12 @@
     }
 
     function pollAdminUpdates() {
-        fetch('/op/admin/updates', {
+        const searchVal = document.getElementById('search-op').value.trim();
+        const filterVal = document.getElementById('filter-status').value;
+        const categoryVal = activeCategory;
+        const pageVal = '{{ $ordenes->currentPage() }}';
+
+        fetch(`/op/admin/updates?search=${encodeURIComponent(searchVal)}&status=${encodeURIComponent(filterVal)}&category=${encodeURIComponent(categoryVal)}&page=${pageVal}`, {
             headers: {
                 'X-Requested-With': 'XMLHttpRequest',
                 'Accept': 'application/json'

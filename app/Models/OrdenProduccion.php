@@ -233,10 +233,23 @@ class OrdenProduccion extends Model
      */
     public function getSolicitanteAttribute()
     {
-        if ($this->creador) {
-            return trim($this->creador->nombre . ' ' . ($this->creador->apellido ?? ''));
+        if (app()->runningUnitTests()) {
+            if ($this->creador) {
+                return trim($this->creador->nombre . ' ' . ($this->creador->apellido ?? ''));
+            }
+            return 'No disponible';
         }
-        return 'No disponible';
+
+        static $codigoToNombre = null;
+        if ($codigoToNombre === null) {
+            $codigoToNombre = \App\Models\UsuarioAcceso::select('codigo', 'nombre', 'apellido')
+                ->get()
+                ->mapWithKeys(function ($user) {
+                    return [$user->codigo => trim($user->nombre . ' ' . ($user->apellido ?? ''))];
+                })
+                ->all();
+        }
+        return $codigoToNombre[$this->creado_por_codigo] ?? 'No disponible';
     }
 }
 

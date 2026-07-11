@@ -155,10 +155,11 @@
                 <input 
                     type="text" 
                     id="search-op" 
-                    placeholder="Buscar por número OP..." 
+                    placeholder="Buscar por número OP (Presione Enter)..." 
                     class="form-control" 
                     style="padding: 8px 12px; font-size: 0.9rem; height: 38px; width: 100%;"
-                    oninput="applyVendedorFilters()"
+                    value="{{ request('search') }}"
+                    onkeydown="if(event.key === 'Enter') submitFilters()"
                 >
             </div>
             
@@ -168,26 +169,29 @@
                     id="filter-status" 
                     class="form-control" 
                     style="padding: 8px 12px; font-size: 0.9rem; height: 38px; cursor: pointer; width: 100%;"
-                    onchange="applyVendedorFilters()"
+                    onchange="submitFilters()"
                 >
-                    <option value="activas" selected>Todas activas</option>
-                    <option value="Pendiente">Pendientes</option>
-                    <option value="En proceso">En proceso</option>
-                    <option value="En espera">En espera</option>
-                    <option value="Terminado">Terminadas</option>
-                    <option value="Cancelado">Canceladas</option>
-                    <option value="todos">Todas</option>
+                    <option value="activas" {{ request('status', 'activas') === 'activas' ? 'selected' : '' }}>Todas activas</option>
+                    <option value="Pendiente" {{ request('status') === 'Pendiente' ? 'selected' : '' }}>Pendientes</option>
+                    <option value="En proceso" {{ request('status') === 'En proceso' ? 'selected' : '' }}>En proceso</option>
+                    <option value="En espera" {{ request('status') === 'En espera' ? 'selected' : '' }}>En espera</option>
+                    <option value="Terminado" {{ request('status') === 'Terminado' ? 'selected' : '' }}>Terminadas</option>
+                    <option value="Cancelado" {{ request('status') === 'Cancelado' ? 'selected' : '' }}>Canceladas</option>
+                    <option value="todos" {{ request('status') === 'todos' ? 'selected' : '' }}>Todas</option>
                 </select>
             </div>
         </div>
     </div>
 
     <!-- Category Tabs -->
+    @php
+        $activeCat = request('category', 'todos');
+    @endphp
     <div class="category-tabs-container">
-        <button class="category-tab active" data-category="todos" onclick="selectCategoryTab('todos')">Todas</button>
-        <button class="category-tab" data-category="Branding" onclick="selectCategoryTab('Branding')">Branding</button>
-        <button class="category-tab" data-category="Promocional" onclick="selectCategoryTab('Promocional')">Promocional</button>
-        <button class="category-tab" data-category="Reprocesos" onclick="selectCategoryTab('Reprocesos')">Reprocesos</button>
+        <button class="category-tab {{ $activeCat === 'todos' ? 'active' : '' }}" data-category="todos" onclick="selectCategoryTab('todos')">Todas</button>
+        <button class="category-tab {{ $activeCat === 'Branding' ? 'active' : '' }}" data-category="Branding" onclick="selectCategoryTab('Branding')">Branding</button>
+        <button class="category-tab {{ $activeCat === 'Promocional' ? 'active' : '' }}" data-category="Promocional" onclick="selectCategoryTab('Promocional')">Promocional</button>
+        <button class="category-tab {{ $activeCat === 'Reprocesos' ? 'active' : '' }}" data-category="Reprocesos" onclick="selectCategoryTab('Reprocesos')">Reprocesos</button>
     </div>
 
     <div style="overflow-x: auto;">
@@ -297,6 +301,25 @@
             </tbody>
         </table>
     </div>
+
+    <!-- Paginación -->
+    @if($ordenes->hasPages())
+        <div class="pagination-container" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px; padding: 10px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-glass); border-radius: 8px;">
+            @if($ordenes->onFirstPage())
+                <span style="opacity: 0.5; pointer-events: none; padding: 6px 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); border-radius: 6px; color: var(--text-muted); font-size: 0.85rem;">« Anterior</span>
+            @else
+                <a href="{{ $ordenes->appends(request()->query())->previousPageUrl() }}" class="btn-save-inline" style="padding: 6px 12px; background: rgba(0, 210, 255, 0.1); border: 1px solid rgba(0, 210, 255, 0.25); border-radius: 6px; color: var(--blue-bright); text-decoration: none; font-size: 0.85rem;">« Anterior</a>
+            @endif
+
+            <span style="color: var(--text-muted); font-size: 0.85rem; font-weight: 600;">Página {{ $ordenes->currentPage() }} de {{ $ordenes->lastPage() }}</span>
+
+            @if($ordenes->hasMorePages())
+                <a href="{{ $ordenes->appends(request()->query())->nextPageUrl() }}" class="btn-save-inline" style="padding: 6px 12px; background: rgba(0, 210, 255, 0.1); border: 1px solid rgba(0, 210, 255, 0.25); border-radius: 6px; color: var(--blue-bright); text-decoration: none; font-size: 0.85rem;">Siguiente »</a>
+            @else
+                <span style="opacity: 0.5; pointer-events: none; padding: 6px 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); border-radius: 6px; color: var(--text-muted); font-size: 0.85rem;">Siguiente »</span>
+            @endif
+        </div>
+    @endif
 </div>
 
 <!-- Panel de Detalle (Sólo Lectura) -->
@@ -561,8 +584,8 @@
     const loggedInUserCode = "{{ session('user_code') }}";
     const loggedInUserRole = "{{ session('user_role') }}";
     let selectedOrderId = null;
-    let activeCategory = 'todos';
-    let allOrders = @json($ordenes);
+    let activeCategory = '{{ request('category', 'todos') }}';
+    let allOrders = @json($ordenes->items());
     const storageBaseUrl = "/storage";
 
     function selectOrder(id) {
@@ -612,73 +635,19 @@
             }
         });
         
-        applyVendedorFilters();
+        submitFilters();
+    }
+
+    function submitFilters() {
+        const searchVal = document.getElementById('search-op').value.trim();
+        const filterVal = document.getElementById('filter-status').value;
+        const categoryVal = activeCategory;
+        
+        window.location.href = `{{ route('op.mis_ordenes') }}?search=${encodeURIComponent(searchVal)}&status=${encodeURIComponent(filterVal)}&category=${encodeURIComponent(categoryVal)}`;
     }
 
     function applyVendedorFilters() {
-        const searchVal = document.getElementById('search-op').value.toLowerCase().trim();
-        const filterVal = document.getElementById('filter-status').value;
-        const rows = document.querySelectorAll('.admin-row');
-        
-        let visibleCount = 0;
-
-        rows.forEach(row => {
-            if (row.id === 'empty-row' || row.id === 'no-results-row') return;
-            const estado = row.getAttribute('data-estado');
-            const numeroOp = row.getAttribute('data-numero-op').toLowerCase();
-            const categoria = row.getAttribute('data-categoria');
-
-            // Category filter logic
-            let matchesCategory = true;
-            if (activeCategory !== 'todos') {
-                if (activeCategory === 'Reprocesos') {
-                    matchesCategory = (categoria === 'Reprocesos' || categoria === 'Reproceso' || categoria === 'REPROCESO');
-                } else {
-                    matchesCategory = (categoria === activeCategory);
-                }
-            }
-
-            // Status filter logic
-            let matchesFilter = false;
-            if (filterVal === 'activas') {
-                matchesFilter = (estado === 'Pendiente' || estado === 'En proceso' || estado === 'En espera');
-            } else if (filterVal === 'todos') {
-                matchesFilter = true;
-            } else {
-                matchesFilter = (estado === filterVal);
-            }
-
-            // Search by OP number logic
-            let matchesSearch = true;
-            if (searchVal) {
-                matchesSearch = numeroOp.includes(searchVal);
-            }
-
-            if (matchesCategory && matchesFilter && matchesSearch) {
-                row.style.display = '';
-                visibleCount++;
-            } else {
-                row.style.display = 'none';
-            }
-        });
-
-        // Toggle empty message row
-        if (rows.length > 0) {
-            const noResults = document.getElementById('no-results-row');
-            if (visibleCount === 0) {
-                if (!noResults) {
-                    const tbody = document.querySelector('tbody');
-                    if (tbody) {
-                        const tr = document.createElement('tr');
-                        tr.id = 'no-results-row';
-                        tr.innerHTML = `<td colspan="9" style="text-align: center; color: var(--text-muted); padding: 40px;">No se encontraron órdenes con los filtros seleccionados.</td>`;
-                        tbody.appendChild(tr);
-                    }
-                }
-            } else {
-                if (noResults) noResults.remove();
-            }
-        }
+        // Passive, no client-side filtering needed since server-side pagination & filtering is in place.
     }
 
     function populateDetail(order) {
@@ -942,7 +911,12 @@
         if (isPollingVendedor) return;
         isPollingVendedor = true;
 
-        fetch('/op/mis-ordenes/updates', {
+        const searchVal = document.getElementById('search-op').value.trim();
+        const filterVal = document.getElementById('filter-status').value;
+        const categoryVal = activeCategory;
+        const pageVal = '{{ $ordenes->currentPage() }}';
+
+        fetch(`/op/mis-ordenes/updates?search=${encodeURIComponent(searchVal)}&status=${encodeURIComponent(filterVal)}&category=${encodeURIComponent(categoryVal)}&page=${pageVal}`, {
             headers: {
                 'X-Requested-With': 'XMLHttpRequest',
                 'Accept': 'application/json'

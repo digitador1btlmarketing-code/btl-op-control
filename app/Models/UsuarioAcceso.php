@@ -20,4 +20,12 @@ class UsuarioAcceso extends Model
     protected $casts = [
         'activo' => 'boolean',
     ];
+
+    /**
+     * Get the production orders created by this user.
+     */
+    public function ordenes()
+    {
+        return $this->hasMany(OrdenProduccion::class, 'creado_por_codigo', 'codigo');
+    }
 }
