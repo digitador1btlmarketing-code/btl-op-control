@@ -220,9 +220,31 @@
                             </div>
                         </td>
                         <td>
-                            <button type="button" class="btn-save-inline" style="background: var(--bg-btn-view); border-color: var(--border-btn-view); color: var(--blue-bright);">
-                                Ver
-                            </button>
+                            @php
+                                $editable = !in_array($orden->estado, ['En proceso', 'Terminado', 'Finalizado']);
+                                // Jefe solo puede editar OPs que él mismo creó
+                                $esPropia = ($orden->creado_por_codigo === session('user_code'));
+                            @endphp
+                            <div style="display: flex; gap: 6px; align-items: center;">
+                                <button type="button" class="btn-save-inline" style="background: var(--bg-btn-view); border-color: var(--border-btn-view); color: var(--blue-bright);">
+                                    Ver
+                                </button>
+                                @if($editable && $esPropia)
+                                    <button type="button"
+                                        onclick="event.stopPropagation(); openEditOPModal({{ $orden->id }})"
+                                        class="btn-save-inline"
+                                        style="background: rgba(255,166,0,0.15); border-color: rgba(255,166,0,0.4); color: #ffa600; white-space: nowrap;">
+                                        ✏️ Editar
+                                    </button>
+                                @else
+                                    <button type="button" disabled
+                                        class="btn-save-inline"
+                                        style="opacity:0.35; cursor:not-allowed; background: rgba(255,166,0,0.05); border-color: rgba(255,166,0,0.15); color: #ffa600; white-space: nowrap;"
+                                        title="{{ !$esPropia ? 'Solo puedes editar tus propias OPs' : 'No se puede editar en estado '.$orden->estado }}">
+                                        ✏️ Editar
+                                    </button>
+                                @endif
+                            </div>
                         </td>
                     </tr>
                 @empty
@@ -425,6 +447,9 @@
             <a id="btn-download-pdf-op" href="#" target="_blank" class="btn-secondary" style="width: auto; padding: 8px 16px; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; background: rgba(0, 210, 255, 0.1); border-color: rgba(0, 210, 255, 0.2); color: var(--blue-bright);">
                 📄 Descargar PDF OP
             </a>
+            <button id="btn-edit-op-detail" onclick="openEditOPModal(selectedOrderId)" class="btn-save-inline" style="display:none; background: rgba(255,166,0,0.15); border-color: rgba(255,166,0,0.4); color: #ffa600; padding: 8px 16px; font-size: 0.85rem; font-weight: 600;">
+                ✏️ Editar OP
+            </button>
             <button id="btn-request-date-change" onclick="openRequestDateChangeModal()" class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 0.85rem; display: none;">
                 Solicitar cambio de fecha
             </button>
@@ -631,6 +656,77 @@
         <div style="display: flex; justify-content: flex-end;">
             <button onclick="closeHistoryModal()" class="filter-btn" style="padding: 10px 20px; font-weight: 600;">Cerrar</button>
         </div>
+    </div>
+</div>
+
+
+
+{{-- ── MODAL EDITAR OP (Jefe de Ventas) ── --}}
+<div id="edit-op-modal" class="custom-modal-overlay hidden" style="position:fixed;top:0;left:0;width:100%;height:100%;background:var(--bg-modal-overlay);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:10000;overflow-y:auto;padding:20px;">
+    <div class="card" style="max-width:700px;width:100%;border-color:var(--border-glass);box-shadow:var(--card-shadow);padding:30px;margin:auto;position:relative;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:15px;border-bottom:1px solid var(--border-glass);">
+            <div>
+                <h3 style="font-size:1.4rem;font-weight:800;color:var(--green-lime);margin:0;display:flex;align-items:center;gap:8px;">✏️ Editar Orden de Producción</h3>
+                <p id="edit-op-subtitle" style="font-size:0.85rem;color:var(--text-muted);margin:4px 0 0;">Cargando datos...</p>
+            </div>
+            <button onclick="closeEditOPModal()" style="background:rgba(255,51,102,0.15);border:1px solid rgba(255,51,102,0.3);color:var(--priority-urgente);padding:5px 12px;border-radius:6px;cursor:pointer;font-size:0.85rem;font-weight:600;white-space:nowrap;margin-left:15px;">✕ Cerrar</button>
+        </div>
+        <div id="edit-op-blocked" style="display:none;background:rgba(255,51,102,0.1);border:1px solid rgba(255,51,102,0.3);border-radius:8px;padding:16px;margin-bottom:20px;color:#ff3366;font-size:0.95rem;font-weight:600;">
+            🚫 <span id="edit-op-blocked-msg"></span>
+        </div>
+        <form id="edit-op-form" onsubmit="submitEditOPForm(event)" enctype="multipart/form-data">
+            @csrf
+            <input type="hidden" id="edit-op-id" name="_op_id" value="">
+            <h4 style="font-size:1rem;color:var(--blue-bright);margin-bottom:16px;margin-top:0;">1. Datos Generales</h4>
+            <div class="grid-2" style="margin-bottom:15px;">
+                <div class="form-group"><label for="edit-categoria">Categoría *</label><select id="edit-categoria" name="categoria" required><option value="Branding">Branding</option><option value="Promocional">Promocional</option><option value="Reprocesos">Reprocesos</option></select></div>
+                <div class="form-group"><label for="edit-numero-op">Número OP *</label><input type="text" id="edit-numero-op" name="numero_op" class="form-control" required></div>
+            </div>
+            <div class="grid-2" style="margin-bottom:15px;">
+                <div class="form-group"><label for="edit-proyecto">Proyecto / Campaña *</label><input type="text" id="edit-proyecto" name="proyecto" class="form-control" required></div>
+                <div class="form-group"><label for="edit-presupuestista">Presupuestista *</label><input type="text" id="edit-presupuestista" name="presupuestista" class="form-control" required></div>
+            </div>
+            <div class="grid-2" style="margin-bottom:15px;">
+                <div class="form-group"><label for="edit-cliente">Cliente *</label><input type="text" id="edit-cliente" name="cliente" class="form-control" required></div>
+                <div class="form-group"><label for="edit-marca">Marca *</label><input type="text" id="edit-marca" name="marca" class="form-control" required></div>
+            </div>
+            <div class="grid-2" style="margin-bottom:15px;">
+                <div class="form-group"><label for="edit-fecha-entrega" style="display:flex;align-items:center;gap:6px;">Fecha de Entrega <span style="background:rgba(255,166,0,0.15);color:#ffa600;border:1px solid rgba(255,166,0,0.3);border-radius:4px;font-size:0.7rem;padding:1px 6px;font-weight:700;">SOLO LECTURA</span></label><input type="date" id="edit-fecha-entrega" name="fecha_entrega_display" class="form-control" readonly style="opacity:0.6;cursor:not-allowed;"></div>
+                <div class="form-group"><label for="edit-hora-entrega" style="display:flex;align-items:center;gap:6px;">Hora de Entrega <span style="background:rgba(255,166,0,0.15);color:#ffa600;border:1px solid rgba(255,166,0,0.3);border-radius:4px;font-size:0.7rem;padding:1px 6px;font-weight:700;">SOLO LECTURA</span></label><input type="time" id="edit-hora-entrega" name="hora_entrega_display" class="form-control" readonly style="opacity:0.6;cursor:not-allowed;"></div>
+            </div>
+            <p style="font-size:0.78rem;color:rgba(255,166,0,0.8);margin:-8px 0 14px 0;">⚠️ La fecha y hora de entrega no pueden modificarse desde esta pantalla.</p>
+            <div class="form-group" style="margin-bottom:15px;"><label for="edit-detalles">Detalles de la OP</label><textarea id="edit-detalles" name="detalles" class="form-control" rows="3"></textarea></div>
+            <h4 style="font-size:1rem;color:var(--blue-bright);margin-bottom:12px;margin-top:20px;border-top:1px solid var(--border-glass);padding-top:16px;">2. Destino y Entrega</h4>
+            <div class="form-group" style="margin-bottom:15px;"><label for="edit-entregar-a">Entregar A *</label><select id="edit-entregar-a" name="entregar_a" required onchange="toggleEditInstalacionFields()"><option value="Cliente">Cliente</option><option value="Bodega">Bodega</option><option value="Instaladores">Instaladores</option></select></div>
+            <div id="edit-instalacion-fields" class="installation-fields hidden">
+                <h5 style="font-size:0.9rem;color:var(--priority-proxima);margin-bottom:12px;">Detalles de Instalación</h5>
+                <div class="form-group" style="margin-bottom:12px;"><label for="edit-lugar-instalacion">Lugar *</label><input type="text" id="edit-lugar-instalacion" name="lugar_instalacion" class="form-control"></div>
+                <div class="grid-2" style="margin-bottom:12px;">
+                    <div class="form-group"><label for="edit-fecha-instalacion">Fecha Instalación *</label><input type="date" id="edit-fecha-instalacion" name="fecha_instalacion" class="form-control"></div>
+                    <div class="form-group"><label for="edit-hora-instalacion">Hora Instalación *</label><input type="time" id="edit-hora-instalacion" name="hora_instalacion" class="form-control"></div>
+                </div>
+                <div class="grid-2" style="margin-bottom:12px;">
+                    <div class="form-group"><label for="edit-fecha-desinstalacion">Fecha Desinstalación</label><input type="date" id="edit-fecha-desinstalacion" name="fecha_desinstalacion" class="form-control"></div>
+                    <div class="form-group"><label for="edit-hora-desinstalacion">Hora Desinstalación</label><input type="time" id="edit-hora-desinstalacion" name="hora_desinstalacion" class="form-control"></div>
+                </div>
+            </div>
+            <h4 style="font-size:1rem;color:var(--blue-bright);margin-bottom:12px;margin-top:20px;border-top:1px solid var(--border-glass);padding-top:16px;">3. Archivos Adjuntos</h4>
+            <div id="edit-existing-files" style="margin-bottom:14px;">
+                <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Archivos actuales</p>
+                <div id="edit-existing-files-list" style="display:flex;flex-direction:column;gap:8px;"><em style="color:var(--text-muted);font-size:0.85rem;">Cargando archivos...</em></div>
+            </div>
+            <div class="form-group" style="margin-bottom:20px;">
+                <label for="edit-brief">Agregar nuevos archivos</label>
+                <input type="file" id="edit-brief" name="brief[]" class="form-control" accept=".pdf,.ppt,.pptx,.zip,.jpg,.jpeg,.png,.gif,.svg,.webp,.ai,.psd,.xls,.xlsx,.csv,.doc,.docx" multiple>
+                <p style="font-size:0.75rem;color:var(--text-muted);margin-top:5px;">Máx. 100 MB por archivo</p>
+                <div id="edit-new-files-list" style="display:flex;flex-direction:column;gap:8px;margin-top:8px;"></div>
+            </div>
+            <div id="edit-op-form-error" style="display:none;background:rgba(255,51,102,0.1);border:1px solid rgba(255,51,102,0.3);border-radius:8px;padding:12px;color:#ff3366;font-size:0.9rem;margin-bottom:15px;"></div>
+            <div style="display:flex;gap:12px;justify-content:flex-end;padding-top:10px;border-top:1px solid var(--border-glass);">
+                <button type="button" onclick="closeEditOPModal()" class="filter-btn" style="padding:10px 20px;width:auto;font-weight:600;">Cancelar</button>
+                <button type="submit" id="edit-op-submit-btn" class="btn-primary" style="width:auto;padding:10px 28px;font-weight:700;">💾 Guardar Cambios</button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -848,11 +944,19 @@
         if (order.archivos && order.archivos.length > 0) {
             order.archivos.forEach((file) => {
                 const fileName = file.file_name || 'Archivo';
-                filesHtml += `
-                    <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: var(--text-white); font-size: 0.9rem; word-break: break-all;">${fileName}</span>
-                        <a href="/op/descargar-archivo/${file.id}" target="_blank" class="btn-view-brief" style="background: rgba(0, 210, 255, 0.15); color: var(--blue-bright); border: 1px solid rgba(0, 210, 255, 0.3); padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; text-decoration: none; white-space: nowrap;">Descargar</a>
-                    </div>`;
+                if (file.is_missing) {
+                    filesHtml += `
+                        <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: var(--text-muted); font-size: 0.9rem; word-break: break-all; text-decoration: line-through;">${fileName}</span>
+                            <span style="color: #ff3366; font-size: 0.8rem; font-style: italic; font-weight: 600;">Archivo no disponible</span>
+                        </div>`;
+                } else {
+                    filesHtml += `
+                        <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: var(--text-white); font-size: 0.9rem; word-break: break-all;">${fileName}</span>
+                            <a href="/op/descargar-archivo/${file.id}" target="_blank" class="btn-view-brief" style="background: rgba(0, 210, 255, 0.15); color: var(--blue-bright); border: 1px solid rgba(0, 210, 255, 0.3); padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; text-decoration: none; white-space: nowrap;">Descargar</a>
+                        </div>`;
+                }
             });
         } else if (order.brief) {
             const fileName = order.brief.split('/').pop() || 'Plano';
@@ -869,6 +973,18 @@
         const pdfBtn = document.getElementById('btn-download-pdf-op');
         if (pdfBtn) {
             pdfBtn.href = `/op/exportar/detalle/${order.id}`;
+        }
+
+        // Show/hide the Editar OP button based on state and ownership (Jefe only edits own OPs)
+        const editBtn = document.getElementById('btn-edit-op-detail');
+        if (editBtn) {
+            const estadosBloqueados = ['En proceso', 'Terminado', 'Finalizado'];
+            const esPropia = (order.creado_por_codigo === loggedInUserCode);
+            if (!estadosBloqueados.includes(order.estado) && esPropia) {
+                editBtn.style.display = 'inline-flex';
+            } else {
+                editBtn.style.display = 'none';
+            }
         }
 
         const instSection = document.getElementById('detail-installation-section');
@@ -1276,6 +1392,24 @@
                 if (orden.estado === 'Cancelado') statusBadgeClass = 'badge-cancelado';
                 if (orden.estado === 'En espera') statusBadgeClass = 'badge-en-espera';
 
+                const editable = !['En proceso', 'Terminado', 'Finalizado'].includes(orden.estado);
+                const esPropia = (orden.creado_por_codigo === loggedInUserCode);
+                const editButtonHtml = (editable && esPropia) ? `
+                    <button type="button"
+                        onclick="event.stopPropagation(); openEditOPModal(${orden.id})"
+                        class="btn-save-inline"
+                        style="background: rgba(255,166,0,0.15); border-color: rgba(255,166,0,0.4); color: #ffa600; white-space: nowrap;">
+                        ✏️ Editar
+                    </button>
+                ` : `
+                    <button type="button" disabled
+                        class="btn-save-inline"
+                        style="opacity:0.35; cursor:not-allowed; background: rgba(255,166,0,0.05); border-color: rgba(255,166,0,0.15); color: #ffa600; white-space: nowrap;"
+                        title="${!esPropia ? 'Solo puedes editar tus propias OPs' : 'No se puede editar en estado ' + orden.estado}">
+                        ✏️ Editar
+                    </button>
+                `;
+
                 row.innerHTML = `
                     <td>
                         <div style="display: flex; align-items: center; gap: 8px;">
@@ -1321,9 +1455,12 @@
                         </div>
                     </td>
                     <td>
-                        <button type="button" class="btn-save-inline" style="background: var(--bg-btn-view); border-color: var(--border-btn-view); color: var(--blue-bright);">
-                            Ver
-                        </button>
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                            <button type="button" class="btn-save-inline" style="background: var(--bg-btn-view); border-color: var(--border-btn-view); color: var(--blue-bright);">
+                                Ver
+                            </button>
+                            ${editButtonHtml}
+                        </div>
                     </td>
                 `;
 
@@ -1452,5 +1589,197 @@
     function closeHistoryModal() {
         document.getElementById('history-modal').classList.add('hidden');
     }
+
+    // ── Editar OP (Jefe de Ventas) ───────────────────────────────────────────
+    let editOpNewFiles = [];
+    const loggedInUserCodeJefe = "{{ session('user_code') }}";
+
+    function openEditOPModal(id) {
+        if (!id) return;
+        const modal     = document.getElementById('edit-op-modal');
+        const blocked   = document.getElementById('edit-op-blocked');
+        const blockedMsg = document.getElementById('edit-op-blocked-msg');
+        const form      = document.getElementById('edit-op-form');
+        const subtitle  = document.getElementById('edit-op-subtitle');
+
+        blocked.style.display  = 'none';
+        form.style.display     = 'block';
+        document.getElementById('edit-op-form-error').style.display = 'none';
+        subtitle.textContent   = 'Cargando datos...';
+        document.getElementById('edit-existing-files-list').innerHTML = '<em style="color:var(--text-muted);font-size:0.85rem;">Cargando archivos...</em>';
+        document.getElementById('edit-new-files-list').innerHTML = '';
+        editOpNewFiles = [];
+
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+
+        fetch(`/op/editar/${id}`, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+        })
+        .then(res => res.json().then(data => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+            if (!ok) {
+                if (data.bloqueado) {
+                    form.style.display   = 'none';
+                    blockedMsg.textContent = data.error || 'No se puede editar esta OP.';
+                    blocked.style.display  = 'block';
+                    subtitle.textContent   = `Estado actual: ${data.estado || ''}`;
+                } else {
+                    showToast(data.error || 'Error al cargar la OP.', 'error');
+                    closeEditOPModal();
+                }
+                return;
+            }
+            const orden    = data.orden;
+            const archivos = data.archivos || [];
+
+            document.getElementById('edit-op-id').value          = orden.id;
+            document.getElementById('edit-categoria').value      = orden.categoria || '';
+            document.getElementById('edit-numero-op').value      = orden.numero_op || '';
+            document.getElementById('edit-proyecto').value       = orden.proyecto || '';
+            document.getElementById('edit-presupuestista').value = orden.presupuestista || '';
+            document.getElementById('edit-cliente').value        = orden.cliente || '';
+            document.getElementById('edit-marca').value          = orden.marca || '';
+            document.getElementById('edit-detalles').value       = orden.detalles || '';
+            document.getElementById('edit-entregar-a').value     = orden.entregar_a || 'Cliente';
+
+            document.getElementById('edit-fecha-entrega').value  = orden.fecha_entrega ? orden.fecha_entrega.substring(0, 10) : '';
+            document.getElementById('edit-hora-entrega').value   = orden.hora_entrega ? orden.hora_entrega.substring(0, 5) : '';
+
+            toggleEditInstalacionFields();
+            if (orden.entregar_a === 'Instaladores') {
+                document.getElementById('edit-lugar-instalacion').value    = orden.lugar_instalacion || '';
+                document.getElementById('edit-fecha-instalacion').value    = orden.fecha_instalacion ? orden.fecha_instalacion.substring(0, 10) : '';
+                document.getElementById('edit-hora-instalacion').value     = orden.hora_instalacion ? orden.hora_instalacion.substring(0, 5) : '';
+                document.getElementById('edit-fecha-desinstalacion').value = orden.fecha_desinstalacion ? orden.fecha_desinstalacion.substring(0, 10) : '';
+                document.getElementById('edit-hora-desinstalacion').value  = orden.hora_desinstalacion ? orden.hora_desinstalacion.substring(0, 5) : '';
+            }
+            subtitle.textContent = `OP: ${orden.numero_op}  |  Estado: ${orden.estado}`;
+            renderExistingFiles(archivos);
+        })
+        .catch(err => {
+            console.error('[Editar OP Jefe]', err);
+            showToast('Error al conectar con el servidor.', 'error');
+            closeEditOPModal();
+        });
+    }
+
+    function closeEditOPModal() {
+        document.getElementById('edit-op-modal').classList.add('hidden');
+        document.body.style.overflow = '';
+        editOpNewFiles = [];
+    }
+
+    function toggleEditInstalacionFields() {
+        const val    = document.getElementById('edit-entregar-a')?.value;
+        const fields = document.getElementById('edit-instalacion-fields');
+        if (!fields) return;
+        fields.classList.toggle('hidden', val !== 'Instaladores');
+    }
+
+    function renderExistingFiles(archivos) {
+        const container = document.getElementById('edit-existing-files-list');
+        if (!archivos || archivos.length === 0) {
+            container.innerHTML = '<em style="color:var(--text-muted);font-size:0.85rem;">Sin archivos adjuntos.</em>';
+            return;
+        }
+        container.innerHTML = archivos.map(file => `
+            <div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.03);border:1px solid var(--border-glass);padding:8px 12px;border-radius:6px;">
+                <span style="flex:1;color:var(--text-white);font-size:0.88rem;word-break:break-all;">${file.file_name || 'Archivo'}</span>
+                <label style="display:flex;align-items:center;gap:5px;font-size:0.8rem;color:var(--priority-urgente);cursor:pointer;white-space:nowrap;">
+                    <input type="checkbox" name="archivos_eliminar[]" value="${file.id}" style="accent-color:var(--priority-urgente);">
+                    Eliminar
+                </label>
+            </div>`).join('');
+    }
+
+    document.addEventListener('change', function(e) {
+        if (e.target && e.target.id === 'edit-brief') {
+            Array.from(e.target.files).forEach(file => {
+                const exists = editOpNewFiles.some(f => f.name === file.name && f.size === file.size);
+                if (!exists) editOpNewFiles.push(file);
+            });
+            renderNewFilesList();
+            e.target.value = '';
+        }
+    });
+
+    function renderNewFilesList() {
+        const container = document.getElementById('edit-new-files-list');
+        if (!container) return;
+        container.innerHTML = editOpNewFiles.map((file, i) => `
+            <div style="display:flex;align-items:center;gap:10px;background:rgba(0,242,195,0.05);border:1px solid rgba(0,242,195,0.2);padding:7px 12px;border-radius:6px;">
+                <span style="flex:1;font-size:0.85rem;color:var(--text-white);word-break:break-all;">${file.name}</span>
+                <span style="font-size:0.75rem;color:var(--text-muted);white-space:nowrap;">${(file.size/1024/1024).toFixed(2)} MB</span>
+                <button type="button" onclick="removeNewFile(${i})" style="background:rgba(255,51,102,0.15);border:1px solid rgba(255,51,102,0.3);color:var(--priority-urgente);border-radius:4px;padding:2px 8px;cursor:pointer;font-size:0.78rem;">✕</button>
+            </div>`).join('');
+    }
+
+    function removeNewFile(index) {
+        editOpNewFiles.splice(index, 1);
+        renderNewFilesList();
+    }
+
+    function submitEditOPForm(event) {
+        event.preventDefault();
+        const opId      = document.getElementById('edit-op-id').value;
+        const submitBtn = document.getElementById('edit-op-submit-btn');
+        const errorDiv  = document.getElementById('edit-op-form-error');
+
+        submitBtn.disabled    = true;
+        submitBtn.textContent = '⏳ Guardando...';
+        errorDiv.style.display = 'none';
+
+        const form = document.getElementById('edit-op-form');
+        const fd   = new FormData(form);
+
+        const dt = new DataTransfer();
+        editOpNewFiles.forEach(f => dt.items.add(f));
+        document.getElementById('edit-brief').files = dt.files;
+        editOpNewFiles.forEach(f => fd.append('brief[]', f));
+
+        document.querySelectorAll('#edit-existing-files-list input[name="archivos_eliminar[]"]').forEach(cb => {
+            if (cb.checked) fd.append('archivos_eliminar[]', cb.value);
+        });
+
+        fetch(`/op/editar/${opId}`, {
+            method: 'POST',
+            body: fd,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+            }
+        })
+        .then(res => res.json().then(data => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+            submitBtn.disabled    = false;
+            submitBtn.textContent = '💾 Guardar Cambios';
+
+            if (!ok || data.error) {
+                errorDiv.textContent   = data.error || data.message || 'Error al guardar los cambios.';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            closeEditOPModal();
+            showToast('✅ Orden de producción actualizada correctamente.', 'success');
+            pollJefeUpdates();
+        })
+        .catch(err => {
+            console.error('[Editar OP submit Jefe]', err);
+            submitBtn.disabled    = false;
+            submitBtn.textContent = '💾 Guardar Cambios';
+            errorDiv.textContent  = 'Error de conexión. Intente nuevamente.';
+            errorDiv.style.display = 'block';
+        });
+    }
+
+    document.addEventListener('click', function(e) {
+        const modal = document.getElementById('edit-op-modal');
+        if (modal && !modal.classList.contains('hidden') && e.target === modal) {
+            closeEditOPModal();
+        }
+    });
 </script>
 @endsection

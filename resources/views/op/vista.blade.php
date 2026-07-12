@@ -471,11 +471,19 @@
         if (order.archivos && order.archivos.length > 0) {
             order.archivos.forEach((file) => {
                 const fileName = file.file_name || 'Archivo';
-                filesHtml += `
-                    <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: var(--text-white); font-size: 0.9rem; word-break: break-all;">${fileName}</span>
-                        <a href="/op/descargar-archivo/${file.id}" target="_blank" class="btn-view-brief" style="background: rgba(0, 210, 255, 0.15); color: var(--blue-bright); border: 1px solid rgba(0, 210, 255, 0.3); padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; text-decoration: none; white-space: nowrap;">Descargar</a>
-                    </div>`;
+                if (file.is_missing) {
+                    filesHtml += `
+                        <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: var(--text-muted); font-size: 0.9rem; word-break: break-all; text-decoration: line-through;">${fileName}</span>
+                            <span style="color: #ff3366; font-size: 0.8rem; font-style: italic; font-weight: 600;">Archivo no disponible</span>
+                        </div>`;
+                } else {
+                    filesHtml += `
+                        <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: var(--text-white); font-size: 0.9rem; word-break: break-all;">${fileName}</span>
+                            <a href="/op/descargar-archivo/${file.id}" target="_blank" class="btn-view-brief" style="background: rgba(0, 210, 255, 0.15); color: var(--blue-bright); border: 1px solid rgba(0, 210, 255, 0.3); padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; text-decoration: none; white-space: nowrap;">Descargar</a>
+                        </div>`;
+                }
             });
         } else if (order.brief) {
             const fileName = order.brief.split('/').pop() || 'Plano';

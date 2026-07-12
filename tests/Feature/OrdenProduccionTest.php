@@ -1352,5 +1352,327 @@ class OrdenProduccionTest extends TestCase
         $this->assertEquals('No disponible', $legacyOp->solicitante);
         $this->assertEquals('Sin detalles adicionales.', $legacyOp->detalles && trim($legacyOp->detalles) !== '' ? $legacyOp->detalles : 'Sin detalles adicionales.');
     }
+
+    /**
+     * Test edit permissions for ventas and jefe_ventas roles.
+     */
+    public function test_vendedor_and_jefe_edit_op_permissions(): void
+    {
+        // 1. Create access records
+        $vendedor = \App\Models\UsuarioAcceso::create([
+            'codigo' => 'VEND-01',
+            'nombre' => 'Dafne',
+            'apellido' => 'Ramirez',
+            'rol' => 'ventas',
+            'activo' => true,
+        ]);
+
+        $jefe = \App\Models\UsuarioAcceso::create([
+            'codigo' => 'JEFE-01',
+            'nombre' => 'Marta',
+            'apellido' => 'Gomez',
+            'rol' => 'jefe_ventas',
+            'activo' => true,
+        ]);
+
+        // 2. Create OPs
+        $opPropia = OrdenProduccion::create([
+            'categoria' => 'Branding',
+            'numero_op' => 'OP-PROPIA',
+            'proyecto' => 'Proyecto Propio',
+            'presupuestista' => 'Juan',
+            'cliente' => 'Cliente A',
+            'marca' => 'Marca A',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '12:00:00',
+            'entregar_a' => 'Cliente',
+            'creado_por_codigo' => 'VEND-01',
+            'estado' => 'Pendiente',
+        ]);
+
+        $opAjena = OrdenProduccion::create([
+            'categoria' => 'Branding',
+            'numero_op' => 'OP-AJENA',
+            'proyecto' => 'Proyecto Ajeno',
+            'presupuestista' => 'Juan',
+            'cliente' => 'Cliente B',
+            'marca' => 'Marca B',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '12:00:00',
+            'entregar_a' => 'Cliente',
+            'creado_por_codigo' => 'JEFE-01',
+            'estado' => 'Pendiente',
+        ]);
+
+        // ── VENDEDOR TESTS ──
+        session([
+            'user_role' => 'ventas',
+            'user_code' => 'VEND-01',
+            'user_name' => 'Dafne',
+        ]);
+
+        // Can edit own OP (GET)
+        $response = $this->getJson("/op/editar/{$opPropia->id}");
+        $response->assertStatus(200);
+
+        // Cannot edit other's OP (GET)
+        $response = $this->getJson("/op/editar/{$opAjena->id}");
+        $response->assertStatus(403);
+
+        // Can update own OP (POST)
+        $response = $this->postJson("/op/editar/{$opPropia->id}", [
+            'categoria' => 'Promocional',
+            'numero_op' => 'OP-PROPIA-NEW',
+            'proyecto' => 'Proyecto Propio Mod',
+            'presupuestista' => 'Juan Mod',
+            'cliente' => 'Cliente A Mod',
+            'marca' => 'Marca A Mod',
+            'entregar_a' => 'Cliente',
+        ]);
+        $response->assertStatus(200);
+        $opPropia->refresh();
+        $this->assertEquals('OP-PROPIA-NEW', $opPropia->numero_op);
+
+        // Cannot update other's OP (POST)
+        $response = $this->postJson("/op/editar/{$opAjena->id}", [
+            'categoria' => 'Promocional',
+            'numero_op' => 'OP-AJENA-NEW',
+            'proyecto' => 'Proyecto Ajeno Mod',
+            'presupuestista' => 'Juan Mod',
+            'cliente' => 'Cliente B Mod',
+            'marca' => 'Marca B Mod',
+            'entregar_a' => 'Cliente',
+        ]);
+        $response->assertStatus(403);
+
+        // Cannot edit blocked state
+        $opPropia->update(['estado' => 'En proceso']);
+        $response = $this->getJson("/op/editar/{$opPropia->id}");
+        $response->assertStatus(422);
+
+        // ── JEFE TESTS ──
+        session([
+            'user_role' => 'jefe_ventas',
+            'user_code' => 'JEFE-01',
+            'user_name' => 'Marta',
+        ]);
+
+        // Can edit own OP (GET)
+        $response = $this->getJson("/op/editar/{$opAjena->id}");
+        $response->assertStatus(200);
+
+        // Cannot edit other's OP (GET)
+        $opPropia->update(['estado' => 'Pendiente']); // Reset status
+        $response = $this->getJson("/op/editar/{$opPropia->id}");
+        $response->assertStatus(403);
+    }
+
+    /**
+     * Test Supabase Storage integration metadata saving and URL generation.
+     */
+    public function test_supabase_storage_integration(): void
+    {
+        // 1. Authenticate user
+        $vendedor = \App\Models\UsuarioAcceso::create([
+            'codigo' => 'VEND-02',
+            'nombre' => 'Luis',
+            'apellido' => 'Perez',
+            'rol' => 'ventas',
+            'activo' => true,
+        ]);
+
+        session([
+            'user_role' => 'ventas',
+            'user_code' => 'VEND-02',
+            'user_name' => 'Luis',
+        ]);
+
+        // 2. Prepare mock file
+        $file = \Illuminate\Http\UploadedFile::fake()->create('brief_test.pdf', 500, 'application/pdf');
+
+        // 3. Post new OP with brief file
+        $response = $this->post('/op/nueva', [
+            'categoria' => 'Branding',
+            'numero_op' => 'OP-SFT-001',
+            'proyecto' => 'Proyecto Supabase',
+            'presupuestista' => 'Luis',
+            'cliente' => 'Cliente Supabase',
+            'marca' => 'Marca Supabase',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '10:00',
+            'entregar_a' => 'Cliente',
+            'brief' => [$file], // Multiple files upload
+        ]);
+
+        $response->assertRedirect('/op/nueva');
+
+        // 4. Verify database entry exists with correct metadata
+        $orden = OrdenProduccion::where('numero_op', 'OP-SFT-001')->firstOrFail();
+        $this->assertNotNull($orden->brief);
+        $this->assertStringContainsString('OP-SFT-001/archivos-iniciales', $orden->brief);
+
+        $archivo = \App\Models\OrdenProduccionArchivo::where('orden_produccion_id', $orden->id)->firstOrFail();
+        $this->assertEquals('brief_test.pdf', $archivo->file_name);
+        $this->assertNotNull($archivo->file_size);
+        $this->assertEquals('application/pdf', $archivo->mime_type);
+        $this->assertEquals('VEND-02', $archivo->uploaded_by);
+        $this->assertNotNull($archivo->url);
+
+        // 5. Test descargarBrief route redirects
+        $responseDescargarBrief = $this->get("/op/descargar-brief/{$orden->id}");
+        $responseDescargarBrief->assertStatus(302); // Redirect
+        $responseDescargarBrief->assertRedirect($archivo->url);
+
+        // 6. Test descargarArchivo route redirects
+        $responseDescargarArchivo = $this->get("/op/descargar-archivo/{$archivo->id}");
+        $responseDescargarArchivo->assertStatus(302);
+        $responseDescargarArchivo->assertRedirect($archivo->url);
+
+        // 7. Request a reproceso with file upload
+        // Set order to finished first
+        $orden->update(['estado' => 'Terminado']);
+
+        $reprocesoFile = \Illuminate\Http\UploadedFile::fake()->create('reproceso_test.png', 200, 'image/png');
+        $responseReproceso = $this->postJson("/op/solicitar-reproceso/{$orden->id}", [
+            'motivo' => 'Error de producción',
+            'descripcion' => 'Se necesita reprocesar por error en color',
+            'fecha_requerida' => Carbon::tomorrow()->format('Y-m-d'),
+            'archivo' => $reprocesoFile,
+        ]);
+
+        $responseReproceso->assertStatus(200);
+
+        $solicitud = \App\Models\SolicitudReproceso::where('orden_produccion_id', $orden->id)->firstOrFail();
+        $this->assertNotNull($solicitud->archivo_adjunto);
+        $this->assertStringContainsString('OP-SFT-001/avances', $solicitud->archivo_adjunto);
+        $this->assertNotNull($solicitud->archivo_size);
+        $this->assertEquals('image/png', $solicitud->archivo_mime_type);
+        $this->assertEquals('VEND-02', $solicitud->archivo_uploaded_by);
+        $this->assertNotNull($solicitud->archivo_url);
+    }
+
+    /**
+     * Test the archives migration command.
+     */
+    public function test_archivos_migrar_a_supabase_command(): void
+    {
+        // 1. Setup OP and local files
+        $vendedor = \App\Models\UsuarioAcceso::create([
+            'codigo' => 'VEND-03',
+            'nombre' => 'Jose',
+            'apellido' => 'Gomez',
+            'rol' => 'ventas',
+            'activo' => true,
+        ]);
+
+        $orden = OrdenProduccion::create([
+            'categoria' => 'Branding',
+            'numero_op' => 'OP-MIG-100',
+            'proyecto' => 'Proyecto Migración',
+            'presupuestista' => 'Jose',
+            'cliente' => 'Cliente Migración',
+            'marca' => 'Marca Migración',
+            'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+            'hora_entrega' => '10:00',
+            'entregar_a' => 'Cliente',
+            'creado_por_codigo' => 'VEND-03',
+            'creado_por_nombre' => 'Jose',
+            'creado_por_rol' => 'ventas',
+            'estado' => 'Pendiente',
+        ]);
+
+        \Illuminate\Support\Facades\Storage::fake('public');
+
+        // Create mock local file in faked storage
+        $localPath = 'briefs/mock_local_file.pdf';
+        \Illuminate\Support\Facades\Storage::disk('public')->put($localPath, 'PDF content mock');
+
+        $archivo = \App\Models\OrdenProduccionArchivo::create([
+            'orden_produccion_id' => $orden->id,
+            'file_path' => $localPath,
+            'file_name' => 'mock_local_file.pdf',
+        ]);
+
+        $orden->update(['brief' => $localPath]);
+
+        // 2. Run with dry-run
+        \Illuminate\Support\Facades\Artisan::call('archivos:migrar-a-supabase', ['--dry-run' => true]);
+        $output = \Illuminate\Support\Facades\Artisan::output();
+        $this->assertStringContainsString('Archivos migrados exitosamente: 1', $output);
+
+        // Verify no changes in DB
+        $archivo->refresh();
+        $this->assertEquals($localPath, $archivo->file_path);
+
+        // 3. Run for real
+        $this->artisan('archivos:migrar-a-supabase')
+            ->expectsOutputToContain('=== MIGRACIÓN DE ARCHIVOS A SUPABASE STORAGE ===')
+            ->expectsOutputToContain('Archivos migrados exitosamente: 1')
+            ->assertExitCode(0);
+
+        // Verify updated in DB
+        $archivo->refresh();
+        $this->assertStringContainsString('OP-MIG-100/archivos-iniciales', $archivo->file_path);
+        $this->assertNotNull($archivo->file_size);
+        $this->assertEquals('application/pdf', $archivo->mime_type);
+
+        $orden->refresh();
+        $this->assertEquals($archivo->file_path, $orden->brief);
+    }
+
+    /**
+     * Test store rollback cleans up uploaded files if a database error occurs.
+     */
+    public function test_store_rollback_cleans_up_uploaded_files(): void
+    {
+        // 1. Setup user
+        $vendedor = \App\Models\UsuarioAcceso::create([
+            'codigo' => 'VEND-04',
+            'nombre' => 'Ana',
+            'apellido' => 'Ruiz',
+            'rol' => 'ventas',
+            'activo' => true,
+        ]);
+
+        session([
+            'user_role' => 'ventas',
+            'user_code' => 'VEND-04',
+            'user_name' => 'Ana',
+        ]);
+
+        // Fake storage to count files
+        \Illuminate\Support\Facades\Storage::fake('public');
+
+        $file = \Illuminate\Http\UploadedFile::fake()->create('brief_fail_test.pdf', 500, 'application/pdf');
+
+        // Register model event to fail on update (after file upload)
+        \App\Models\OrdenProduccion::updating(function ($model) {
+            if ($model->proyecto === 'Proyecto Fallido') {
+                throw new \Exception('Forced DB Error');
+            }
+        });
+
+        // Post OP with file attachment
+        try {
+            $response = $this->post('/op/nueva', [
+                'categoria' => 'Branding',
+                'numero_op' => 'OP-FAIL-100',
+                'proyecto' => 'Proyecto Fallido',
+                'presupuestista' => 'Ana',
+                'cliente' => 'Cliente Ana',
+                'marca' => 'Marca Ana',
+                'fecha_entrega' => Carbon::tomorrow()->format('Y-m-d'),
+                'hora_entrega' => '10:00',
+                'entregar_a' => 'Cliente',
+                'brief' => [$file],
+            ]);
+        } catch (\Exception $e) {
+            $this->assertEquals('Forced DB Error', $e->getMessage());
+        }
+
+        // Verify that the file was deleted from faked public storage fallback directory
+        $files = \Illuminate\Support\Facades\Storage::disk('public')->allFiles('fallback');
+        $this->assertCount(0, $files);
+    }
 }
 

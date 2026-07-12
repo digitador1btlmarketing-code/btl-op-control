@@ -83,44 +83,50 @@
 
 {{-- Tabla principal --}}
 <div class="table-responsive" id="listado-table-wrapper">
-    <table>
+    <table style="table-layout: auto; width: 100%; min-width: 900px;">
         <thead>
             <tr>
-                <th>Ticket OP</th>
-                <th>Categoría</th>
-                <th>Marca</th>
-                <th>Cliente</th>
-                <th>Presupuestista</th>
-                <th>Líder Producción</th>
-                <th>Fecha Entrega</th>
-                <th>Estado</th>
-                <th>Avance</th>
-                <th>Acciones</th>
+                <th style="white-space: nowrap; min-width: 130px;">Ticket OP</th>
+                <th style="white-space: nowrap; min-width: 90px;">Categoría</th>
+                <th style="min-width: 100px;">Marca</th>
+                <th style="min-width: 110px;">Cliente</th>
+                <th style="min-width: 105px;">Presupuestista</th>
+                <th style="min-width: 140px;">Líder Producción</th>
+                <th style="white-space: nowrap; min-width: 100px;">Fecha Entrega</th>
+                <th style="white-space: nowrap; min-width: 110px;">Estado</th>
+                <th style="min-width: 120px;">Avance</th>
+                <th style="white-space: nowrap; min-width: 155px;">Acciones</th>
             </tr>
         </thead>
         <tbody id="admin-table-body">
             @forelse($ordenes as $orden)
                 <tr class="admin-row" id="row-{{ $orden->id }}" data-id="{{ $orden->id }}" data-estado="{{ $orden->estado }}" data-prioridad="{{ $orden->prioridad }}" data-numero-op="{{ $orden->numero_op }}" data-categoria="{{ $orden->categoria }}">
-                    <td>
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <strong style="color: var(--text-white);">{{ $orden->numero_op }}</strong>
+                    {{-- Ticket OP --}}
+                    <td style="white-space: nowrap;">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <strong style="color: var(--text-white); font-size: 0.85rem;">{{ $orden->numero_op }}</strong>
                             <span id="fire-container-{{ $orden->id }}" class="fire-container @if($orden->estado === 'Terminado' || $orden->estado === 'Cancelado') extinguished @elseif(!$orden->mostrar_fuego) hidden-fire @endif" title="Alerta de prioridad temporal">
                                 <span class="fire-flame">🔥</span>
                             </span>
                         </div>
                     </td>
-                    <td>
+                    {{-- Categoría --}}
+                    <td style="white-space: nowrap;">
                         @php
                             $badgeCategoryClass = $orden->categoria === 'Branding' ? 'badge-normal' : 
                                                   ($orden->categoria === 'Promocional' ? 'badge-proxima' : '');
                         @endphp
                         <span class="badge {{ $badgeCategoryClass }}" style="{{ $orden->categoria === 'Reprocesos' ? 'background: rgba(255, 95, 56, 0.15); color: #ff5f38; border: 1px solid rgba(255, 95, 56, 0.3);' : '' }}">
-                            {{ $orden->categoria === 'Reprocesos' ? 'REPROCESO' : $orden->categoria }}
+                            {{ $orden->categoria === 'Reprocesos' ? 'REPRO' : $orden->categoria }}
                         </span>
                     </td>
-                    <td>{{ $orden->marca }}</td>
-                    <td>{{ $orden->cliente }}</td>
-                    <td>{{ $orden->presupuestista }}</td>
+                    {{-- Marca --}}
+                    <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ $orden->marca }}">{{ $orden->marca }}</td>
+                    {{-- Cliente --}}
+                    <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ $orden->cliente }}">{{ $orden->cliente }}</td>
+                    {{-- Presupuestista --}}
+                    <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ $orden->presupuestista }}">{{ $orden->presupuestista }}</td>
+                    {{-- Líder Producción --}}
                     <td>
                         <input 
                             type="text" 
@@ -131,14 +137,13 @@
                             class="admin-input-lider"
                         >
                     </td>
-                    <td>
-                        <span class="text-dash">{{ \Carbon\Carbon::parse($orden->fecha_entrega)->format('d/m/Y') }}</span>
-                        <br>
-                        <small style="color: var(--text-muted); font-weight: 600;">
-                            {{ \Carbon\Carbon::parse($orden->hora_entrega)->format('H:i') }}
-                        </small>
+                    {{-- Fecha Entrega --}}
+                    <td style="white-space: nowrap;">
+                        <span class="text-dash" style="font-size: 0.85rem;">{{ \Carbon\Carbon::parse($orden->fecha_entrega)->format('d/m/Y') }}</span>
+                        <span style="color: var(--text-muted); font-size: 0.78rem; font-weight: 600; margin-left: 3px;">{{ \Carbon\Carbon::parse($orden->hora_entrega)->format('H:i') }}</span>
                     </td>
-                    <td>
+                    {{-- Estado --}}
+                    <td style="white-space: nowrap;">
                         <select 
                             name="estado" 
                             form="form-{{ $orden->id }}" 
@@ -152,8 +157,9 @@
                             <option value="Cancelado" {{ $orden->estado === 'Cancelado' ? 'selected' : '' }}>Cancelado</option>
                         </select>
                     </td>
+                    {{-- Avance --}}
                     <td>
-                        <div class="progress-container" style="min-width: 100px;">
+                        <div class="progress-container" style="min-width: 90px;">
                             <div class="progress-track">
                                 <div 
                                     id="progress-fill-{{ $orden->id }}" 
@@ -175,17 +181,45 @@
                             form="form-{{ $orden->id }}" 
                             class="admin-select select-avance" 
                             id="select-avance-{{ $orden->id }}"
-                            style="margin-top: 5px; width: 100%; display: {{ $orden->estado === 'En proceso' ? 'block' : 'none' }}; background: rgba(0, 0, 0, 0.4); color: var(--text-white); border: 1px solid var(--border-glass); border-radius: 4px; padding: 2px 4px; font-size: 0.8rem;"
+                            style="margin-top: 4px; width: 100%; display: {{ $orden->estado === 'En proceso' ? 'block' : 'none' }}; background: rgba(0, 0, 0, 0.4); color: var(--text-white); border: 1px solid var(--border-glass); border-radius: 4px; padding: 2px 4px; font-size: 0.8rem;"
                         >
                             <option value="25" {{ $orden->avance == 25 ? 'selected' : '' }}>25%</option>
                             <option value="50" {{ $orden->avance == 50 ? 'selected' : '' }}>50%</option>
                             <option value="75" {{ $orden->avance == 75 ? 'selected' : '' }}>75%</option>
                         </select>
                     </td>
-                    <td>
-                        <button type="submit" form="form-{{ $orden->id }}" class="btn-save-inline">
-                            Guardar
-                        </button>
+                    {{-- Acciones --}}
+                    <td style="white-space: nowrap;">
+                        <div style="display: flex; gap: 5px; align-items: center; flex-wrap: nowrap;">
+                            <button type="submit" form="form-{{ $orden->id }}" class="btn-save-inline" style="padding: 4px 10px; font-size: 0.8rem;">
+                                Guardar
+                            </button>
+                            @php
+                                $estadosBloqueados = ['En proceso', 'Terminado', 'Finalizado'];
+                                $edicionBloqueada  = in_array($orden->estado, $estadosBloqueados);
+                            @endphp
+                            @if($edicionBloqueada)
+                                <button 
+                                    type="button"
+                                    class="btn-save-inline"
+                                    style="padding: 4px 10px; font-size: 0.8rem; background: rgba(255,255,255,0.04); border-color: var(--border-glass); color: var(--text-muted); cursor: not-allowed; opacity: 0.5;"
+                                    title="No se puede editar: la OP ya está {{ $orden->estado }}"
+                                    onclick="alert('No es posible editar esta OP porque su estado es « {{ $orden->estado }} ». El proceso de producción ya inició o fue finalizado.')"
+                                >
+                                    ✏️ Editar
+                                </button>
+                            @else
+                                <button 
+                                    type="button"
+                                    class="btn-save-inline"
+                                    style="padding: 4px 10px; font-size: 0.8rem; background: rgba(0, 210, 255, 0.12); border-color: rgba(0, 210, 255, 0.3); color: var(--blue-bright);"
+                                    title="Editar esta OP"
+                                    onclick="openEditOPModal({{ $orden->id }})"
+                                >
+                                    ✏️ Editar
+                                </button>
+                            @endif
+                        </div>
                     </td>
                 </tr>
             @empty

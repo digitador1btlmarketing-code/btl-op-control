@@ -26,6 +26,13 @@ Route::middleware('access:admin,admin_branding,admin_promo')->group(function () 
     Route::post('/op/eliminar/{id}', [OrdenProduccionController::class, 'eliminarOP'])->name('op.eliminar');
 });
 
+// Editar OP — accesible para admins, vendedores y jefe de ventas
+// La validación de propiedad (solo editar propias OPs) se hace en el controlador.
+Route::middleware('access:admin,admin_branding,admin_promo,ventas,jefe_ventas')->group(function () {
+    Route::get('/op/editar/{id}', [OrdenProduccionController::class, 'editarOP'])->name('op.editar');
+    Route::post('/op/editar/{id}', [OrdenProduccionController::class, 'actualizarOP'])->name('op.actualizar');
+});
+
 Route::middleware('access:admin,admin_branding,admin_promo,jefe_ventas,ventas')->group(function () {
     Route::post('/op/solicitar-cambio-fecha', [OrdenProduccionController::class, 'solicitarCambioFecha'])->name('op.solicitar_cambio_fecha');
     Route::post('/jefe/cambio-fecha/aprobar/{id}', [OrdenProduccionController::class, 'aprobarCambioFecha'])->name('jefe.cambio_fecha.aprobar');
@@ -72,7 +79,7 @@ Route::middleware('access:admin,admin_branding,admin_promo,jefe_ventas')->group(
     Route::get('/op/exportar/pdf', [OrdenProduccionController::class, 'exportarPDF'])->name('op.exportar.pdf');
 });
 
-Route::middleware('access:admin,admin_branding,admin_promo,jefe_ventas,ventas,vista')->group(function () {
+Route::middleware('access:admin,admin_branding,admin_promo,jefe_ventas,ventas,vista,tv_branding,tv_promocional')->group(function () {
     Route::get('/op/exportar/detalle/{id}', [OrdenProduccionController::class, 'exportarDetallePDF'])->name('op.exportar.detalle');
     Route::get('/op/descargar-brief/{id}', [OrdenProduccionController::class, 'descargarBrief'])->name('op.descargar_brief');
     Route::get('/op/descargar-archivo/{id}', [OrdenProduccionController::class, 'descargarArchivo'])->name('op.descargar_archivo');

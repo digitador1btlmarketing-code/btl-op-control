@@ -12,6 +12,11 @@ class OrdenProduccionArchivo extends Model
         'orden_produccion_id',
         'file_path',
         'file_name',
+        'file_size',
+        'mime_type',
+        'uploaded_by',
+        'url',
+        'is_missing',
     ];
 
     public function ordenProduccion()

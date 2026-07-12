@@ -8,6 +8,7 @@ use App\Models\SolicitudCambioFecha;
 use App\Models\HistorialOrden;
 use App\Models\OrdenProduccionArchivo;
 use App\Models\SolicitudReproceso;
+use App\Services\SupabaseStorageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
@@ -105,47 +106,60 @@ class OrdenProduccionController extends Controller
         $validated['creado_por_nombre'] = session('user_name');
         $validated['creado_por_rol'] = session('user_role');
 
-        // Create the order. 'avance' and 'estado' are set via defaults & events.
-        $orden = OrdenProduccion::create($validated);
+        $uploadedPaths = [];
+        DB::beginTransaction();
+        try {
+            // Create the order. 'avance' and 'estado' are set via defaults & events.
+            $orden = OrdenProduccion::create($validated);
 
-        // Handle multiple file uploads
-        if ($briefFiles) {
-            $firstPath = null;
-            if (is_array($briefFiles)) {
-                foreach ($briefFiles as $index => $file) {
-                    $originalName = $file->getClientOriginalName();
-                    $path = $file->store('briefs', 'public');
-                    if ($index === 0) {
-                        $firstPath = $path;
+            // Handle multiple file uploads
+            if ($briefFiles) {
+                $firstPath = null;
+                $filesArray = is_array($briefFiles) ? $briefFiles : [$briefFiles];
+                foreach ($filesArray as $index => $file) {
+                    if ($file) {
+                        $uploadResult = SupabaseStorageService::uploadFile($file, $orden->numero_op, 'archivos-iniciales');
+                        $uploadedPaths[] = $uploadResult['path'];
+                        if ($index === 0) {
+                            $firstPath = $uploadResult['path'];
+                        }
+                        $orden->archivos()->create([
+                            'file_path'   => $uploadResult['path'],
+                            'file_name'   => $uploadResult['name'],
+                            'file_size'   => $uploadResult['size'],
+                            'mime_type'   => $uploadResult['mime_type'],
+                            'url'         => $uploadResult['url'],
+                            'uploaded_by' => session('user_code') ?: 'SISTEMA',
+                        ]);
                     }
-                    $orden->archivos()->create([
-                        'file_path' => $path,
-                        'file_name' => $originalName,
-                    ]);
                 }
-            } else {
-                $file = $briefFiles;
-                $originalName = $file->getClientOriginalName();
-                $path = $file->store('briefs', 'public');
-                $firstPath = $path;
-                $orden->archivos()->create([
-                    'file_path' => $path,
-                    'file_name' => $originalName,
-                ]);
+                if ($firstPath) {
+                    $orden->update(['brief' => $firstPath]);
+                }
             }
-            if ($firstPath) {
-                $orden->update(['brief' => $firstPath]);
-            }
-        }
 
-        // Log to history
-        $orden->historial()->create([
-            'tipo_evento' => 'creacion',
-            'descripcion' => 'OP creada por ' . session('user_name') . ' (' . session('user_code') . ') con rol ' . session('user_role') . '.',
-            'realizado_por_codigo' => session('user_code'),
-            'realizado_por_nombre' => session('user_name'),
-            'realizado_por_rol' => session('user_role'),
-        ]);
+            // Log to history
+            $orden->historial()->create([
+                'tipo_evento' => 'creacion',
+                'descripcion' => 'OP creada por ' . session('user_name') . ' (' . session('user_code') . ') con rol ' . session('user_role') . '.',
+                'realizado_por_codigo' => session('user_code'),
+                'realizado_por_nombre' => session('user_name'),
+                'realizado_por_rol' => session('user_role'),
+            ]);
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            // Clean up uploaded files from Storage since DB failed
+            foreach ($uploadedPaths as $path) {
+                try {
+                    SupabaseStorageService::deleteFile($path);
+                } catch (\Exception $ex) {
+                    \Illuminate\Support\Facades\Log::error("Failed to delete orphaned file after DB failure: " . $path);
+                }
+            }
+            throw $e;
+        }
 
         $this->clearDashboardCache();
 
@@ -1446,29 +1460,22 @@ class OrdenProduccionController extends Controller
             abort(404, 'Esta orden no tiene un brief adjunto.');
         }
 
-        $filePath = $orden->brief; // e.g., briefs/xyz.jpg
+        $filePath = $orden->brief;
 
-        if (!Storage::disk('public')->exists($filePath)) {
-            abort(404, 'El archivo del brief no existe en el servidor.');
+        $archivo = \App\Models\OrdenProduccionArchivo::where('orden_produccion_id', $orden->id)
+            ->where('file_path', $filePath)
+            ->first();
+
+        if ($archivo && $archivo->is_missing) {
+            abort(404, 'Archivo no disponible');
         }
 
-        $fileContent  = Storage::disk('public')->get($filePath);
-        $fileName     = basename($filePath);
-        $extension    = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+        $signedUrl = SupabaseStorageService::getSignedUrl($filePath);
+        if (!$signedUrl) {
+            abort(404, 'El archivo del brief no existe.');
+        }
 
-        // Detect MIME type from content (no local path required)
-        $finfo    = new \finfo(FILEINFO_MIME_TYPE);
-        $mimeType = $finfo->buffer($fileContent) ?: 'application/octet-stream';
-
-        $inlineExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'];
-        $disposition = in_array($extension, $inlineExtensions) ? 'inline' : 'attachment';
-
-        return response($fileContent, 200, [
-            'Content-Type'        => $mimeType,
-            'Content-Length'      => strlen($fileContent),
-            'Content-Disposition' => $disposition . '; filename="' . $fileName . '"',
-            'Cache-Control'       => 'private, no-cache, no-store, must-revalidate',
-        ]);
+        return redirect($signedUrl);
     }
 
     /**
@@ -2000,29 +2007,19 @@ class OrdenProduccionController extends Controller
     public function descargarArchivo($id)
     {
         $archivo  = OrdenProduccionArchivo::findOrFail($id);
-        $filePath = $archivo->file_path;
 
-        if (!Storage::disk('public')->exists($filePath)) {
-            abort(404, 'El archivo no existe en el servidor. Puede que haya sido eliminado o que el servidor haya sido reiniciado.');
+        if ($archivo->is_missing) {
+            abort(404, 'Archivo no disponible');
         }
 
-        $fileContent = Storage::disk('public')->get($filePath);
-        $fileName    = $archivo->file_name ?: basename($filePath);
-        $extension   = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+        $filePath = $archivo->file_path;
 
-        // Detect MIME type from content (no local path required)
-        $finfo    = new \finfo(FILEINFO_MIME_TYPE);
-        $mimeType = $finfo->buffer($fileContent) ?: 'application/octet-stream';
+        $signedUrl = SupabaseStorageService::getSignedUrl($filePath);
+        if (!$signedUrl) {
+            abort(404, 'El archivo no existe.');
+        }
 
-        $inlineExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'];
-        $disposition = in_array($extension, $inlineExtensions) ? 'inline' : 'attachment';
-
-        return response($fileContent, 200, [
-            'Content-Type'        => $mimeType,
-            'Content-Length'      => strlen($fileContent),
-            'Content-Disposition' => $disposition . '; filename="' . $fileName . '"',
-            'Cache-Control'       => 'private, no-cache, no-store, must-revalidate',
-        ]);
+        return redirect($signedUrl);
     }
 
     /**
@@ -2056,30 +2053,62 @@ class OrdenProduccionController extends Controller
             'archivo' => 'nullable|file|max:102400',
         ]);
 
-        $filePath = null;
-        if ($request->hasFile('archivo')) {
-            $filePath = $request->file('archivo')->store('reprocesos_adjuntos', 'public');
+        $uploadedPaths = [];
+        DB::beginTransaction();
+        try {
+            $filePath = null;
+            $fileSize = null;
+            $fileMime = null;
+            $fileUrl = null;
+            $uploadedBy = null;
+
+            if ($request->hasFile('archivo')) {
+                $uploadResult = SupabaseStorageService::uploadFile($request->file('archivo'), $orden->numero_op, 'avances');
+                $filePath = $uploadResult['path'];
+                $uploadedPaths[] = $filePath;
+                $fileSize = $uploadResult['size'];
+                $fileMime = $uploadResult['mime_type'];
+                $fileUrl = $uploadResult['url'];
+                $uploadedBy = session('user_code') ?: 'SISTEMA';
+            }
+
+            SolicitudReproceso::create([
+                'orden_produccion_id' => $id,
+                'motivo' => $request->motivo,
+                'descripcion' => $request->descripcion,
+                'fecha_requerida' => $request->fecha_requerida,
+                'archivo_adjunto' => $filePath,
+                'archivo_size' => $fileSize,
+                'archivo_mime_type' => $fileMime,
+                'archivo_url' => $fileUrl,
+                'archivo_uploaded_by' => $uploadedBy,
+                'estado' => 'Pendiente',
+                'solicitado_por_codigo' => session('user_code'),
+                'solicitado_por_nombre' => session('user_name'),
+            ]);
+
+            // Log to history
+            $orden->historial()->create([
+                'tipo_evento' => 'solicitud_reproceso',
+                'descripcion' => 'Solicitud de reproceso creada por ' . session('user_name') . ' (' . session('user_code') . '). Motivo: ' . $request->motivo . '. Descripción: ' . $request->descripcion,
+                'realizado_por_codigo' => session('user_code'),
+                'realizado_por_nombre' => session('user_name'),
+                'realizado_por_rol' => session('user_role'),
+            ]);
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            // Clean up uploaded file if DB failed
+            foreach ($uploadedPaths as $path) {
+                try {
+                    SupabaseStorageService::deleteFile($path);
+                } catch (\Exception $ex) {
+                    \Illuminate\Support\Facades\Log::error("Failed to delete orphaned file after DB failure: " . $path);
+                }
+            }
+            throw $e;
         }
-
-        SolicitudReproceso::create([
-            'orden_produccion_id' => $id,
-            'motivo' => $request->motivo,
-            'descripcion' => $request->descripcion,
-            'fecha_requerida' => $request->fecha_requerida,
-            'archivo_adjunto' => $filePath,
-            'estado' => 'Pendiente',
-            'solicitado_por_codigo' => session('user_code'),
-            'solicitado_por_nombre' => session('user_name'),
-        ]);
-
-        // Log to history
-        $orden->historial()->create([
-            'tipo_evento' => 'solicitud_reproceso',
-            'descripcion' => 'Solicitud de reproceso creada por ' . session('user_name') . ' (' . session('user_code') . '). Motivo: ' . $request->motivo . '. Descripción: ' . $request->descripcion,
-            'realizado_por_codigo' => session('user_code'),
-            'realizado_por_nombre' => session('user_name'),
-            'realizado_por_rol' => session('user_role'),
-        ]);
 
         $this->clearDashboardCache();
 
@@ -2308,4 +2337,268 @@ class OrdenProduccionController extends Controller
         \Illuminate\Support\Facades\Cache::forget('dashboard_stats_admin_branding');
         \Illuminate\Support\Facades\Cache::forget('dashboard_stats_admin_promo');
     }
+
+    /**
+     * Return full OP data (with files) for the Edit OP modal (AJAX GET).
+     */
+    public function editarOP(Request $request, $id)
+    {
+        $userRole = session('user_role');
+        $userCode = session('user_code');
+
+        $isAdmin = in_array($userRole, ['admin', 'admin_branding', 'admin_promo']);
+        $isSales = in_array($userRole, ['ventas', 'jefe_ventas']);
+
+        // Secondary role check
+        if (!$isAdmin && !$isSales) {
+            return response()->json(['error' => 'No tiene permisos para editar órdenes de producción.'], 403);
+        }
+
+        $orden = OrdenProduccion::with('archivos')->findOrFail($id);
+
+        // Vendedor/Jefe: can only edit their own OPs
+        if ($isSales && $orden->creado_por_codigo !== $userCode) {
+            return response()->json([
+                'error'    => 'No tienes permiso para editar esta Orden de Producción.',
+                'bloqueado' => true,
+            ], 403);
+        }
+
+        // Admin category-based access restriction
+        if ($userRole === 'admin_branding' && !in_array($orden->categoria, ['Branding', 'Reprocesos', 'REPROCESO', 'reproceso'])) {
+            return response()->json(['error' => 'No tiene permisos para editar esta orden.'], 403);
+        }
+        if ($userRole === 'admin_promo' && !in_array($orden->categoria, ['Promocional', 'Reprocesos', 'REPROCESO', 'reproceso'])) {
+            return response()->json(['error' => 'No tiene permisos para editar esta orden.'], 403);
+        }
+
+        // Block editing for in-production states
+        $estadosBloqueados = ['En proceso', 'Terminado', 'Finalizado'];
+        if (in_array($orden->estado, $estadosBloqueados)) {
+            return response()->json([
+                'error'     => 'No es posible editar esta orden porque el proceso de producción ya inició o fue finalizado.',
+                'estado'    => $orden->estado,
+                'bloqueado' => true,
+            ], 422);
+        }
+
+        return response()->json([
+            'orden'    => $orden,
+            'archivos' => $orden->archivos,
+        ]);
+    }
+
+    /**
+     * Update an existing OP (edición pre-producción).
+     * Only allowed when estado is NOT En proceso / Terminado / Finalizado.
+     */
+    public function actualizarOP(Request $request, $id)
+    {
+        $userRole = session('user_role');
+        $userCode = session('user_code');
+
+        $isAdmin = in_array($userRole, ['admin', 'admin_branding', 'admin_promo']);
+        $isSales = in_array($userRole, ['ventas', 'jefe_ventas']);
+
+        if (!$isAdmin && !$isSales) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['error' => 'No tiene permisos para editar órdenes de producción.'], 403);
+            }
+            return redirect()->route('login')->with('error', 'No tiene permisos para editar órdenes de producción.');
+        }
+
+        $orden = OrdenProduccion::with('archivos')->findOrFail($id);
+
+        // Vendedor/Jefe: can only edit their own OPs
+        if ($isSales && $orden->creado_por_codigo !== $userCode) {
+            return response()->json(['error' => 'No tienes permiso para editar esta Orden de Producción.'], 403);
+        }
+
+        // Admin category-based access restriction
+        if ($userRole === 'admin_branding' && !in_array($orden->categoria, ['Branding', 'Reprocesos', 'REPROCESO', 'reproceso'])) {
+            return response()->json(['error' => 'No tiene permisos para editar esta orden.'], 403);
+        }
+        if ($userRole === 'admin_promo' && !in_array($orden->categoria, ['Promocional', 'Reprocesos', 'REPROCESO', 'reproceso'])) {
+            return response()->json(['error' => 'No tiene permisos para editar esta orden.'], 403);
+        }
+
+        // Re-verify state before saving
+        $estadosBloqueados = ['En proceso', 'Terminado', 'Finalizado'];
+        if (in_array($orden->estado, $estadosBloqueados)) {
+            $msg = 'No es posible editar esta orden porque el proceso de producción ya inició o fue finalizado.';
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['error' => $msg, 'bloqueado' => true], 422);
+            }
+            $redirectRoute = $isAdmin ? 'op.admin' : ($userRole === 'jefe_ventas' ? 'op.jefe_ventas' : 'op.mis_ordenes');
+            return redirect()->route($redirectRoute)->with('error', $msg);
+        }
+
+        // Validation rules — fecha_entrega y hora_entrega son de solo lectura y no se actualizan
+        $rules = [
+            'categoria'    => 'required|in:Branding,Promocional,Reprocesos,Reproceso,REPROCESO',
+            'numero_op'    => 'required|string|max:100',
+            'proyecto'     => 'required|string|max:255',
+            'presupuestista' => 'required|string|max:255',
+            'cliente'      => 'required|string|max:255',
+            'marca'        => 'required|string|max:255',
+            'entregar_a'   => 'required|in:Cliente,Bodega,Instaladores',
+            'detalles'     => 'nullable|string',
+            'brief'        => 'nullable|array',
+            'brief.*'      => 'file|max:102400',
+            'archivos_eliminar' => 'nullable|array',
+            'archivos_eliminar.*' => 'integer',
+        ];
+
+        if ($request->input('entregar_a') === 'Instaladores') {
+            $rules['lugar_instalacion']    = 'required|string|max:255';
+            $rules['fecha_instalacion']    = 'required|date';
+            $rules['hora_instalacion']     = 'required';
+            $rules['fecha_desinstalacion'] = 'nullable|date';
+            $rules['hora_desinstalacion']  = 'nullable';
+        }
+
+        $validated = $request->validate($rules, [
+            'categoria.required'    => 'La categoría es obligatoria.',
+            'numero_op.required'    => 'El número de OP es obligatorio.',
+            'proyecto.required'     => 'El nombre del proyecto es obligatorio.',
+            'presupuestista.required' => 'El presupuestista es obligatorio.',
+            'cliente.required'      => 'El cliente es obligatorio.',
+            'marca.required'        => 'La marca es obligatoria.',
+            'entregar_a.required'   => 'El destino de entrega es obligatorio.',
+            'lugar_instalacion.required' => 'El lugar de instalación es obligatorio.',
+            'fecha_instalacion.required' => 'La fecha de instalación es obligatoria.',
+            'hora_instalacion.required'  => 'La hora de instalación es obligatoria.',
+            'brief.*.max'           => 'El archivo no debe pesar más de 100MB.',
+        ]);
+
+        // Manual extension validation for new files
+        if ($request->hasFile('brief')) {
+            $allowedExtensions = ['pdf', 'ppt', 'pptx', 'zip', 'jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'ai', 'psd', 'xls', 'xlsx', 'csv', 'doc', 'docx'];
+            foreach ($request->file('brief') as $file) {
+                if ($file) {
+                    $ext = strtolower($file->getClientOriginalExtension());
+                    if (!in_array($ext, $allowedExtensions)) {
+                        $errorMsg = 'El archivo no es válido. Formatos permitidos: PDF, Excel, Word, PowerPoint, ZIP, imágenes, AI, PSD y CSV.';
+                        if ($request->ajax() || $request->wantsJson()) {
+                            return response()->json(['error' => $errorMsg], 422);
+                        }
+                        return redirect()->back()->withInput()->withErrors(['brief' => $errorMsg]);
+                    }
+                }
+            }
+        }
+
+        // Clean up installation fields if not Instaladores
+        if ($request->input('entregar_a') !== 'Instaladores') {
+            $validated['lugar_instalacion']    = null;
+            $validated['fecha_instalacion']    = null;
+            $validated['hora_instalacion']     = null;
+            $validated['fecha_desinstalacion'] = null;
+            $validated['hora_desinstalacion']  = null;
+        }
+
+        // Extract file-related data from validated array before updating order
+        $nuevosArchivos    = $request->file('brief');
+        $archivosEliminar  = $request->input('archivos_eliminar', []);
+        unset($validated['brief'], $validated['archivos_eliminar']);
+
+        // Snapshot old values for history
+        $oldNumeroOp    = $orden->numero_op;
+        $oldCategoria   = $orden->categoria;
+        $oldFecha       = $orden->fecha_entrega;
+        $oldPresup      = $orden->presupuestista;
+
+        $newUploadedPaths = [];
+        $filesToDeletePaths = [];
+
+        DB::beginTransaction();
+        try {
+            // Update order fields
+            $orden->update($validated);
+
+            // 1. Delete files marked for removal from DB first, collect paths to delete later
+            if (!empty($archivosEliminar)) {
+                $archivosAEliminar = OrdenProduccionArchivo::whereIn('id', $archivosEliminar)
+                    ->where('orden_produccion_id', $orden->id)
+                    ->get();
+
+                foreach ($archivosAEliminar as $archivo) {
+                    $filesToDeletePaths[] = $archivo->file_path;
+                    $archivo->delete();
+                }
+            }
+
+            // 2. Add new files
+            if ($nuevosArchivos && is_array($nuevosArchivos)) {
+                foreach ($nuevosArchivos as $file) {
+                    if ($file) {
+                        $uploadResult = SupabaseStorageService::uploadFile($file, $orden->numero_op, 'archivos-iniciales');
+                        $newUploadedPaths[] = $uploadResult['path'];
+                        $orden->archivos()->create([
+                            'file_path'   => $uploadResult['path'],
+                            'file_name'   => $uploadResult['name'],
+                            'file_size'   => $uploadResult['size'],
+                            'mime_type'   => $uploadResult['mime_type'],
+                            'url'         => $uploadResult['url'],
+                            'uploaded_by' => session('user_code') ?: 'SISTEMA',
+                        ]);
+                    }
+                }
+            }
+
+            // --- History log ---
+            $userCode = session('user_code') ?: 'SISTEMA';
+            $userName = session('user_name') ?: 'SISTEMA';
+            $userRol  = session('user_role')  ?: 'sistema';
+
+            $orden->historial()->create([
+                'tipo_evento'          => 'edicion',
+                'descripcion'          => "{$userName} ({$userCode}) editó la OP. Datos anteriores: OP={$oldNumeroOp}, Categoría={$oldCategoria}, Fecha={$oldFecha}, Presupuestista={$oldPresup}.",
+                'realizado_por_codigo' => $userCode,
+                'realizado_por_nombre' => $userName,
+                'realizado_por_rol'    => $userRol,
+            ]);
+
+            DB::commit();
+
+            // 3. Commit succeeded, safe to delete old files from storage
+            foreach ($filesToDeletePaths as $path) {
+                try {
+                    SupabaseStorageService::deleteFile($path);
+                } catch (\Exception $ex) {
+                    \Illuminate\Support\Facades\Log::error("Failed to delete old file from storage: " . $path);
+                }
+            }
+        } catch (\Exception $e) {
+            DB::rollBack();
+            // Clean up newly uploaded files from Storage since DB failed
+            foreach ($newUploadedPaths as $path) {
+                try {
+                    SupabaseStorageService::deleteFile($path);
+                } catch (\Exception $ex) {
+                    \Illuminate\Support\Facades\Log::error("Failed to delete uploaded file after DB failure: " . $path);
+                }
+            }
+            throw $e;
+        }
+
+        $this->clearDashboardCache();
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Orden de producción actualizada correctamente.',
+            ]);
+        }
+
+        // Redirect to the correct panel depending on role
+        if ($userRole === 'jefe_ventas') {
+            return redirect()->route('op.jefe_ventas')->with('success', 'Orden de producción actualizada correctamente.');
+        }
+        if ($userRole === 'ventas') {
+            return redirect()->route('op.mis_ordenes')->with('success', 'Orden de producción actualizada correctamente.');
+        }
+        return redirect()->route('op.admin')->with('success', 'Orden de producción actualizada correctamente.');
+    }
 }
+

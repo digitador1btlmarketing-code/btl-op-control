@@ -820,6 +820,189 @@
         </form>
     </div>
 </div>
+
+<!-- ===== MODAL: EDITAR ORDEN DE PRODUCCIÓN ===== -->
+<div id="edit-op-modal" class="custom-modal-overlay hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-modal-overlay); backdrop-filter: blur(8px); display: flex; align-items: flex-start; justify-content: center; z-index: 10000; overflow-y: auto; padding: 20px 0;">
+    <div class="card" style="max-width: 780px; width: 94%; border-color: rgba(0, 210, 255, 0.3); box-shadow: var(--card-shadow); padding: 30px; margin: auto; position: relative;">
+
+        <!-- Header -->
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; border-bottom: 1px solid var(--border-glass); padding-bottom: 12px;">
+            <div>
+                <h3 style="font-size: 1.25rem; font-weight: 800; color: var(--blue-bright); margin: 0 0 4px 0;">
+                    ✏️ Editar Orden de Producción
+                </h3>
+                <p id="edit-op-subtitle" style="color: var(--text-muted); font-size: 0.88rem; margin: 0;">Cargando datos...</p>
+            </div>
+            <button onclick="closeEditOPModal()" style="background: rgba(255,51,102,0.15); border: 1px solid rgba(255,51,102,0.3); color: var(--priority-urgente); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; white-space: nowrap; margin-left: 15px;">
+                ✕ Cerrar
+            </button>
+        </div>
+
+        <!-- Bloqueo de estado -->
+        <div id="edit-op-blocked" style="display: none; background: rgba(255,51,102,0.1); border: 1px solid rgba(255,51,102,0.3); border-radius: 8px; padding: 16px; margin-bottom: 20px; color: #ff3366; font-size: 0.95rem; font-weight: 600;">
+            🚫 <span id="edit-op-blocked-msg"></span>
+        </div>
+
+        <!-- Formulario de edición -->
+        <form id="edit-op-form" onsubmit="submitEditOPForm(event)" enctype="multipart/form-data">
+            @csrf
+            <input type="hidden" id="edit-op-id" name="_op_id" value="">
+
+            <!-- Sección 1: Datos Generales -->
+            <h4 style="font-size: 1rem; color: var(--blue-bright); margin-bottom: 16px; margin-top: 0;">1. Datos Generales de la OP</h4>
+
+            <div class="grid-2" style="margin-bottom: 15px;">
+                <!-- Categoría -->
+                <div class="form-group">
+                    <label for="edit-categoria">Categoría *</label>
+                    <select id="edit-categoria" name="categoria" required>
+                        <option value="Branding">Branding</option>
+                        <option value="Promocional">Promocional</option>
+                        <option value="Reprocesos">Reprocesos</option>
+                    </select>
+                </div>
+                <!-- Número OP -->
+                <div class="form-group">
+                    <label for="edit-numero-op">Número OP *</label>
+                    <input type="text" id="edit-numero-op" name="numero_op" class="form-control" placeholder="Ej: OP-5421" required>
+                </div>
+            </div>
+
+            <div class="grid-2" style="margin-bottom: 15px;">
+                <!-- Proyecto -->
+                <div class="form-group">
+                    <label for="edit-proyecto">Proyecto / Campaña *</label>
+                    <input type="text" id="edit-proyecto" name="proyecto" class="form-control" placeholder="Ej: Activación de Verano" required>
+                </div>
+                <!-- Presupuestista -->
+                <div class="form-group">
+                    <label for="edit-presupuestista">Presupuestista *</label>
+                    <input type="text" id="edit-presupuestista" name="presupuestista" class="form-control" placeholder="Ej: Juan Pérez" required>
+                </div>
+            </div>
+
+            <div class="grid-2" style="margin-bottom: 15px;">
+                <!-- Cliente -->
+                <div class="form-group">
+                    <label for="edit-cliente">Cliente *</label>
+                    <input type="text" id="edit-cliente" name="cliente" class="form-control" placeholder="Ej: Coca-Cola" required>
+                </div>
+                <!-- Marca -->
+                <div class="form-group">
+                    <label for="edit-marca">Marca *</label>
+                    <input type="text" id="edit-marca" name="marca" class="form-control" placeholder="Ej: Sprite" required>
+                </div>
+            </div>
+
+            <div class="grid-2" style="margin-bottom: 15px;">
+                <!-- Fecha Entrega (solo lectura) -->
+                <div class="form-group">
+                    <label for="edit-fecha-entrega" style="display: flex; align-items: center; gap: 6px;">
+                        Fecha de Entrega
+                        <span style="background: rgba(255,166,0,0.15); color: #ffa600; border: 1px solid rgba(255,166,0,0.3); border-radius: 4px; font-size: 0.7rem; padding: 1px 6px; font-weight: 700; letter-spacing: 0.03em;">SOLO LECTURA</span>
+                    </label>
+                    <input type="date" id="edit-fecha-entrega" name="fecha_entrega_display" class="form-control"
+                        readonly
+                        style="opacity: 0.6; cursor: not-allowed; background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.1);">
+                </div>
+                <!-- Hora Entrega (solo lectura) -->
+                <div class="form-group">
+                    <label for="edit-hora-entrega" style="display: flex; align-items: center; gap: 6px;">
+                        Hora de Entrega
+                        <span style="background: rgba(255,166,0,0.15); color: #ffa600; border: 1px solid rgba(255,166,0,0.3); border-radius: 4px; font-size: 0.7rem; padding: 1px 6px; font-weight: 700; letter-spacing: 0.03em;">SOLO LECTURA</span>
+                    </label>
+                    <input type="time" id="edit-hora-entrega" name="hora_entrega_display" class="form-control"
+                        readonly
+                        style="opacity: 0.6; cursor: not-allowed; background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.1);">
+                </div>
+            </div>
+            <p style="font-size: 0.78rem; color: rgba(255,166,0,0.8); margin: -8px 0 14px 0; display: flex; align-items: center; gap: 5px;">
+                <span>⚠️</span> La fecha y hora de entrega forman parte de la planificación y no pueden modificarse desde esta pantalla.
+            </p>
+
+            <!-- Detalles -->
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label for="edit-detalles">Detalles de la OP</label>
+                <textarea id="edit-detalles" name="detalles" class="form-control" rows="3" placeholder="Instrucciones adicionales (opcional)"></textarea>
+            </div>
+
+            <!-- Sección 2: Destino y Entrega -->
+            <h4 style="font-size: 1rem; color: var(--blue-bright); margin-bottom: 12px; margin-top: 20px; border-top: 1px solid var(--border-glass); padding-top: 16px;">2. Destino y Entrega</h4>
+
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label for="edit-entregar-a">Entregar A *</label>
+                <select id="edit-entregar-a" name="entregar_a" required>
+                    <option value="Cliente">Cliente</option>
+                    <option value="Bodega">Bodega</option>
+                    <option value="Instaladores">Instaladores</option>
+                </select>
+            </div>
+
+            <!-- Campos condicionales de Instalación -->
+            <div id="edit-instalacion-fields" class="installation-fields hidden">
+                <h5 style="font-size: 0.9rem; color: var(--priority-proxima); margin-bottom: 12px;">Detalles de Instalación</h5>
+
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label for="edit-lugar-instalacion">Lugar de Instalación *</label>
+                    <input type="text" id="edit-lugar-instalacion" name="lugar_instalacion" class="form-control" placeholder="Ej: CC Miraflores">
+                </div>
+
+                <div class="grid-2" style="margin-bottom: 12px;">
+                    <div class="form-group">
+                        <label for="edit-fecha-instalacion">Fecha de Instalación *</label>
+                        <input type="date" id="edit-fecha-instalacion" name="fecha_instalacion" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-hora-instalacion">Hora de Instalación *</label>
+                        <input type="time" id="edit-hora-instalacion" name="hora_instalacion" class="form-control">
+                    </div>
+                </div>
+
+                <div class="grid-2" style="margin-bottom: 12px;">
+                    <div class="form-group">
+                        <label for="edit-fecha-desinstalacion">Fecha de Desinstalación</label>
+                        <input type="date" id="edit-fecha-desinstalacion" name="fecha_desinstalacion" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-hora-desinstalacion">Hora de Desinstalación</label>
+                        <input type="time" id="edit-hora-desinstalacion" name="hora_desinstalacion" class="form-control">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sección 3: Archivos -->
+            <h4 style="font-size: 1rem; color: var(--blue-bright); margin-bottom: 12px; margin-top: 20px; border-top: 1px solid var(--border-glass); padding-top: 16px;">3. Archivos Adjuntos</h4>
+
+            <!-- Archivos existentes -->
+            <div id="edit-existing-files" style="margin-bottom: 14px;">
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Archivos actuales</p>
+                <div id="edit-existing-files-list" style="display: flex; flex-direction: column; gap: 8px;">
+                    <em style="color: var(--text-muted); font-size: 0.85rem;">Cargando archivos...</em>
+                </div>
+            </div>
+
+            <!-- Nuevos archivos -->
+            <div class="form-group" style="margin-bottom: 20px;">
+                <label for="edit-brief">Agregar nuevos archivos</label>
+                <input type="file" id="edit-brief" name="brief[]" class="form-control" accept=".pdf,.ppt,.pptx,.zip,.jpg,.jpeg,.png,.gif,.svg,.webp,.ai,.psd,.xls,.xlsx,.csv,.doc,.docx" multiple>
+                <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 5px; line-height: 1.4;">
+                    Formatos: PDF, Excel, Word, PPT, ZIP, Imágenes, AI, PSD, CSV &nbsp;·&nbsp; Máx. 100 MB por archivo
+                </p>
+                <div id="edit-new-files-list" style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;"></div>
+            </div>
+
+            <!-- Mensaje de error del formulario -->
+            <div id="edit-op-form-error" style="display: none; background: rgba(255,51,102,0.1); border: 1px solid rgba(255,51,102,0.3); border-radius: 8px; padding: 12px; color: #ff3366; font-size: 0.9rem; margin-bottom: 15px;"></div>
+
+            <!-- Botones -->
+            <div style="display: flex; gap: 12px; justify-content: flex-end; padding-top: 10px; border-top: 1px solid var(--border-glass);">
+                <button type="button" onclick="closeEditOPModal()" class="filter-btn" style="padding: 10px 20px; width: auto; font-weight: 600;">Cancelar</button>
+                <button type="submit" id="edit-op-submit-btn" class="btn-primary" style="width: auto; padding: 10px 28px; font-weight: 700;">💾 Guardar Cambios</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 @endsection
 
 @section('scripts')
@@ -973,6 +1156,9 @@
                     // Re-marcar fila activa (HTML fue reemplazado)
                     const row = document.getElementById('row-' + selectedOrderId);
                     if (row) row.classList.add('active');
+                    // Re-popular el detalle con datos frescos del servidor
+                    // (incluye archivos actualizados tras una edición)
+                    populateDetail(stillHere);
                 } else {
                     hideDetail();
                 }
@@ -1201,11 +1387,19 @@
         if (order.archivos && order.archivos.length > 0) {
             order.archivos.forEach((file) => {
                 const fileName = file.file_name || 'Archivo';
-                filesHtml += `
-                    <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: var(--text-white); font-size: 0.9rem; word-break: break-all;">${fileName}</span>
-                        <a href="/op/descargar-archivo/${file.id}" target="_blank" class="btn-view-brief" style="background: rgba(0, 210, 255, 0.15); color: var(--blue-bright); border: 1px solid rgba(0, 210, 255, 0.3); padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; text-decoration: none; white-space: nowrap;">Descargar</a>
-                    </div>`;
+                if (file.is_missing) {
+                    filesHtml += `
+                        <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: var(--text-muted); font-size: 0.9rem; word-break: break-all; text-decoration: line-through;">${fileName}</span>
+                            <span style="color: #ff3366; font-size: 0.8rem; font-style: italic; font-weight: 600;">Archivo no disponible</span>
+                        </div>`;
+                } else {
+                    filesHtml += `
+                        <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: var(--text-white); font-size: 0.9rem; word-break: break-all;">${fileName}</span>
+                            <a href="/op/descargar-archivo/${file.id}" target="_blank" class="btn-view-brief" style="background: rgba(0, 210, 255, 0.15); color: var(--blue-bright); border: 1px solid rgba(0, 210, 255, 0.3); padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; text-decoration: none; white-space: nowrap;">Descargar</a>
+                        </div>`;
+                }
             });
         } else if (order.brief) {
             const fileName = order.brief.split('/').pop() || 'Plano';
@@ -1956,28 +2150,37 @@
         // Start polling updates
         startPolling();
 
-        // Event delegation for table row clicks to show details
-        const tableBody = document.getElementById('admin-table-body');
-        if (tableBody) {
-            tableBody.addEventListener('click', function(e) {
-                const row = e.target.closest('.admin-row');
-                if (!row) return;
-                
-                // Do not toggle detail panel if clicked on interactive elements (inputs, selects, buttons, links)
-                if (e.target.closest('input, select, button, a')) {
-                    return;
-                }
-                
-                const id = parseInt(row.getAttribute('data-id'));
-                selectOrder(id);
-            });
+        // ── Event delegation desde document para clicks en filas de la tabla ──
+        // IMPORTANTE: El listener está en document (no en #admin-table-body) para que
+        // sobreviva a los reemplazos de DOM que hace AJAX. Si se atara a #admin-table-body,
+        // ese elemento es destruido con cada filtro/búsqueda/paginación AJAX y el listener
+        // se perdería, dejando el detalle sin funcionar.
+        document.addEventListener('click', function(e) {
+            // Solo filas dentro del contenedor del listado
+            const row = e.target.closest('#op-listado-container .admin-row');
+            if (!row) return;
 
-            // Listen to writing, selecting, keypress and focus inside the table to pause polling
-            tableBody.addEventListener('input', handleUserInteraction);
-            tableBody.addEventListener('change', handleUserInteraction);
-            tableBody.addEventListener('keydown', handleUserInteraction);
-            tableBody.addEventListener('focusin', handleUserInteraction);
-        }
+            // Ignorar clics en controles interactivos dentro de la fila
+            if (e.target.closest('input, select, button, a')) return;
+
+            const id = parseInt(row.getAttribute('data-id'));
+            selectOrder(id);
+        });
+
+        // ── Delegación para pausar el polling al interactuar con la tabla ──
+        // También en document para sobrevivir al AJAX reload.
+        document.addEventListener('input', function(e) {
+            if (e.target.closest('#op-listado-container')) handleUserInteraction();
+        });
+        document.addEventListener('change', function(e) {
+            if (e.target.closest('#op-listado-container')) handleUserInteraction();
+        });
+        document.addEventListener('keydown', function(e) {
+            if (e.target.closest('#op-listado-container')) handleUserInteraction();
+        });
+        document.addEventListener('focusin', function(e) {
+            if (e.target.closest('#op-listado-container')) handleUserInteraction();
+        });
 
         // Also pause polling when using search or status filters
         const searchInput = document.getElementById('search-op');
@@ -2076,7 +2279,11 @@
                         // Pause polling for 10 seconds post-save
                         handleUserInteraction();
 
-                        applyAdminFilters();
+                        // Re-fetch the listado with the active filters so rows that no
+                        // longer match (e.g. OP changed to "Terminado" while filter is
+                        // "activas") disappear immediately without a manual F5.
+                        const filterValNow = (document.getElementById('filter-status') || {value: 'activas'}).value;
+                        doFetchListado(lastFilterParams || { search: '', status: filterValNow, category: activeCategory, page: 1 });
                     } else {
                         showToast('Ocurrió un error: ' + data.message, 'error');
                     }
@@ -2543,6 +2750,336 @@
                 document.getElementById('btn-confirm-delete-final').disabled = (val !== 'ELIMINAR');
             });
         }
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // EDITAR OP — Modal, carga de datos, envío
+    // ─────────────────────────────────────────────────────────────────────────
+
+    let editOpNewFiles = []; // acumula nuevos archivos seleccionados
+
+    /**
+     * Abre el modal de edición para la OP con el id indicado.
+     * Hace GET /op/editar/{id} para obtener datos frescos del servidor.
+     */
+    function openEditOPModal(id) {
+        const modal    = document.getElementById('edit-op-modal');
+        const blocked  = document.getElementById('edit-op-blocked');
+        const blockedMsg = document.getElementById('edit-op-blocked-msg');
+        const form     = document.getElementById('edit-op-form');
+        const subtitle = document.getElementById('edit-op-subtitle');
+
+        // Reset estado visual
+        blocked.style.display = 'none';
+        form.style.display    = 'block';
+        document.getElementById('edit-op-form-error').style.display = 'none';
+        subtitle.textContent = 'Cargando datos...';
+        document.getElementById('edit-existing-files-list').innerHTML = '<em style="color: var(--text-muted); font-size: 0.85rem;">Cargando archivos...</em>';
+        document.getElementById('edit-new-files-list').innerHTML = '';
+        editOpNewFiles = [];
+
+        // Mostrar modal mientras carga
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+
+        fetch(`/op/editar/${id}`, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+            }
+        })
+        .then(res => res.json().then(data => ({ ok: res.ok, status: res.status, data })))
+        .then(({ ok, status, data }) => {
+            if (!ok) {
+                if (data.bloqueado) {
+                    // Estado bloqueado: mostrar aviso dentro del modal
+                    form.style.display = 'none';
+                    blockedMsg.textContent = data.error || 'No se puede editar esta OP.';
+                    blocked.style.display = 'block';
+                    subtitle.textContent  = `Estado actual: ${data.estado || 'desconocido'}`;
+                } else {
+                    alert(data.error || 'Error al cargar la OP.');
+                    closeEditOPModal();
+                }
+                return;
+            }
+
+            const orden = data.orden;
+            const archivos = data.archivos || [];
+
+            // Pre-cargar campos del formulario
+            document.getElementById('edit-op-id').value            = orden.id;
+            document.getElementById('edit-categoria').value        = orden.categoria || '';
+            document.getElementById('edit-numero-op').value        = orden.numero_op || '';
+            document.getElementById('edit-proyecto').value         = orden.proyecto || '';
+            document.getElementById('edit-presupuestista').value   = orden.presupuestista || '';
+            document.getElementById('edit-cliente').value          = orden.cliente || '';
+            document.getElementById('edit-marca').value            = orden.marca || '';
+            document.getElementById('edit-detalles').value         = orden.detalles || '';
+            document.getElementById('edit-entregar-a').value       = orden.entregar_a || 'Cliente';
+
+            // Fechas y horas
+            const fechaEnt = orden.fecha_entrega ? orden.fecha_entrega.substring(0, 10) : '';
+            document.getElementById('edit-fecha-entrega').value    = fechaEnt;
+            document.getElementById('edit-hora-entrega').value     = orden.hora_entrega ? orden.hora_entrega.substring(0, 5) : '';
+
+            // Campos instalación
+            toggleEditInstalacionFields();
+            if (orden.entregar_a === 'Instaladores') {
+                const fechaInst = orden.fecha_instalacion ? (typeof orden.fecha_instalacion === 'string' ? orden.fecha_instalacion.substring(0, 10) : '') : '';
+                document.getElementById('edit-lugar-instalacion').value   = orden.lugar_instalacion || '';
+                document.getElementById('edit-fecha-instalacion').value   = fechaInst;
+                document.getElementById('edit-hora-instalacion').value    = orden.hora_instalacion ? orden.hora_instalacion.substring(0, 5) : '';
+                const fechaDesinst = orden.fecha_desinstalacion ? (typeof orden.fecha_desinstalacion === 'string' ? orden.fecha_desinstalacion.substring(0, 10) : '') : '';
+                document.getElementById('edit-fecha-desinstalacion').value = fechaDesinst;
+                document.getElementById('edit-hora-desinstalacion').value  = orden.hora_desinstalacion ? orden.hora_desinstalacion.substring(0, 5) : '';
+            }
+
+            subtitle.textContent = `OP: ${orden.numero_op}  |  Estado: ${orden.estado}`;
+
+            // Listar archivos existentes con opción de eliminar
+            renderExistingFiles(archivos);
+        })
+        .catch(err => {
+            console.error('[Editar OP]', err);
+            alert('Error al conectar con el servidor. Intente nuevamente.');
+            closeEditOPModal();
+        });
+    }
+
+    /** Cierra el modal de edición y restaura el scroll. */
+    function closeEditOPModal() {
+        const modal = document.getElementById('edit-op-modal');
+        modal.classList.add('hidden');
+        document.body.style.overflow = '';
+        editOpNewFiles = [];
+    }
+
+    /** Muestra/oculta los campos de instalación según el select Entregar A. */
+    function toggleEditInstalacionFields() {
+        const val       = document.getElementById('edit-entregar-a').value;
+        const container = document.getElementById('edit-instalacion-fields');
+        const campos    = container.querySelectorAll('input');
+        if (val === 'Instaladores') {
+            container.classList.remove('hidden');
+            ['edit-lugar-instalacion', 'edit-fecha-instalacion', 'edit-hora-instalacion'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.setAttribute('required', 'required');
+            });
+        } else {
+            container.classList.add('hidden');
+            campos.forEach(f => f.removeAttribute('required'));
+        }
+    }
+
+    /** Renderiza la lista de archivos existentes con checkbox de eliminación. */
+    function renderExistingFiles(archivos) {
+        const container = document.getElementById('edit-existing-files-list');
+        if (!archivos || archivos.length === 0) {
+            container.innerHTML = '<em style="color: var(--text-muted); font-size: 0.85rem;">Sin archivos adjuntos.</em>';
+            return;
+        }
+        container.innerHTML = '';
+        archivos.forEach(file => {
+            const item = document.createElement('div');
+            item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.04); border: 1px solid var(--border-glass); padding: 8px 12px; border-radius: 6px; font-size: 0.85rem;';
+            const statusLabel = file.is_missing ? '<span style="color: #ff3366; font-size: 0.75rem; font-style: italic; font-weight: 600; margin-left: 10px;">Archivo no disponible</span>' : '<span style="color: #ff5f38; font-size: 0.75rem; white-space: nowrap; margin-left: 10px; font-weight: 600;">Marcar para eliminar</span>';
+            item.innerHTML = `
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; flex: 1; color: var(--text-white);">
+                    <input type="checkbox" name="archivos_eliminar[]" value="${file.id}" style="transform: scale(1.15); cursor: pointer; accent-color: #ff3366;">
+                    <span style="word-break: break-all; ${file.is_missing ? 'text-decoration: line-through; color: var(--text-muted);' : ''}">📎 ${file.file_name || 'Archivo'}</span>
+                </label>
+                ${statusLabel}
+            `;
+            container.appendChild(item);
+        });
+    }
+
+    /** Maneja la selección de nuevos archivos para el formulario de edición. */
+    (function initEditFileInput() {
+        document.addEventListener('change', function(e) {
+            if (e.target && e.target.id === 'edit-brief') {
+                const validExtensions = ['pdf','ppt','pptx','zip','jpg','jpeg','png','gif','svg','webp','ai','psd','xls','xlsx','csv','doc','docx'];
+                const newFiles = Array.from(e.target.files || []);
+                newFiles.forEach(file => {
+                    const ext = file.name.split('.').pop().toLowerCase();
+                    if (file.size / 1024 / 1024 > 100) {
+                        alert(`El archivo "${file.name}" supera 100 MB.`); return;
+                    }
+                    if (!validExtensions.includes(ext)) {
+                        alert(`Formato no permitido: "${file.name}".`); return;
+                    }
+                    const exists = editOpNewFiles.some(f => f.name === file.name && f.size === file.size);
+                    if (!exists) editOpNewFiles.push(file);
+                });
+                e.target.value = '';
+                renderNewFilesList();
+            }
+        });
+    })();
+
+    /** Actualiza la lista visual de nuevos archivos. */
+    function renderNewFilesList() {
+        const container = document.getElementById('edit-new-files-list');
+        container.innerHTML = '';
+        editOpNewFiles.forEach((file, i) => {
+            const item = document.createElement('div');
+            item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background: rgba(0,210,255,0.06); border: 1px solid rgba(0,210,255,0.2); padding: 8px 12px; border-radius: 6px; font-size: 0.85rem; color: var(--text-white);';
+            const sizeMB = (file.size / 1024 / 1024).toFixed(2);
+            item.innerHTML = `
+                <span style="word-break: break-all; margin-right: 10px;">📄 ${file.name} <span style="color: var(--text-muted); font-size: 0.78rem;">(${sizeMB} MB)</span></span>
+                <button type="button" onclick="removeNewFile(${i})" style="background: rgba(255,51,102,0.15); color: #ff3366; border: 1px solid rgba(255,51,102,0.3); padding: 3px 9px; border-radius: 4px; cursor: pointer; font-size: 0.75rem; white-space: nowrap;">✕ Quitar</button>
+            `;
+            container.appendChild(item);
+        });
+    }
+
+    function removeNewFile(index) {
+        editOpNewFiles.splice(index, 1);
+        renderNewFilesList();
+    }
+
+    /**
+     * Envía el formulario de edición vía AJAX (FormData para soportar archivos).
+     */
+    function submitEditOPForm(event) {
+        event.preventDefault();
+
+        const opId      = document.getElementById('edit-op-id').value;
+        const submitBtn = document.getElementById('edit-op-submit-btn');
+        const errorDiv  = document.getElementById('edit-op-form-error');
+
+        errorDiv.style.display = 'none';
+        submitBtn.disabled     = true;
+        submitBtn.textContent  = 'Guardando...';
+
+        const formData = new FormData();
+        formData.append('_method', 'POST'); // Laravel recibe POST con _method override si se necesita
+        formData.append('_token', document.querySelector('input[name="_token"]', document.getElementById('edit-op-form'))?.value
+            || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '');
+
+        // Campos de texto — fecha_entrega y hora_entrega son readonly y no se envían
+        const fields = ['categoria','numero_op','proyecto','presupuestista','cliente','marca','detalles','entregar_a'];
+        fields.forEach(f => {
+            const el = document.getElementById(`edit-${f.replace(/_/g, '-')}`) ||
+                       document.getElementById(`edit-${f}`);
+            if (el) formData.append(f, el.value);
+        });
+
+        // Campos instalación
+        if (document.getElementById('edit-entregar-a').value === 'Instaladores') {
+            ['lugar_instalacion','fecha_instalacion','hora_instalacion','fecha_desinstalacion','hora_desinstalacion'].forEach(f => {
+                const el = document.getElementById(`edit-${f.replace(/_/g, '-')}`) ||
+                           document.getElementById(`edit-${f}`);
+                if (el) formData.append(f, el.value || '');
+            });
+        }
+
+        // Archivos a eliminar (checkboxes marcados)
+        document.querySelectorAll('#edit-existing-files-list input[name="archivos_eliminar[]"]').forEach(cb => {
+            if (cb.checked) formData.append('archivos_eliminar[]', cb.value);
+        });
+
+        // Nuevos archivos
+        const dt = new DataTransfer();
+        editOpNewFiles.forEach(f => dt.items.add(f));
+        const input = document.getElementById('edit-brief');
+        input.files = dt.files;
+        if (input.files.length > 0) {
+            for (let i = 0; i < input.files.length; i++) {
+                formData.append('brief[]', input.files[i]);
+            }
+        }
+
+        // Snapshot de los valores del formulario para actualizar allOrders inmediatamente
+        const updatedFields = {
+            categoria:      (document.getElementById('edit-categoria')?.value      || ''),
+            numero_op:      (document.getElementById('edit-numero-op')?.value      || ''),
+            proyecto:       (document.getElementById('edit-proyecto')?.value       || ''),
+            presupuestista: (document.getElementById('edit-presupuestista')?.value || ''),
+            cliente:        (document.getElementById('edit-cliente')?.value        || ''),
+            marca:          (document.getElementById('edit-marca')?.value          || ''),
+            detalles:       (document.getElementById('edit-detalles')?.value       || ''),
+            entregar_a:     (document.getElementById('edit-entregar-a')?.value     || ''),
+        };
+        const opIdNum = parseInt(opId);
+
+        fetch(`/op/editar/${opId}`, {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+            },
+            body: formData
+        })
+        .then(res => res.json().then(data => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+            submitBtn.disabled   = false;
+            submitBtn.textContent = '💾 Guardar Cambios';
+
+            if (!ok || data.error) {
+                errorDiv.textContent   = data.error || data.message || 'Error al guardar los cambios.';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            // ── ACTUALIZACIÓN LIMPIA: cerrar modal y pedir datos frescos al servidor ──
+            // No actualizamos allOrders con datos parciales aquí porque updatedFields
+            // no incluye 'archivos' — si lo hiciéramos, el detalle mostraría los
+            // archivos viejos hasta el siguiente poll. En su lugar:
+            //  • cerramos el modal de inmediato,
+            //  • pedimos el listado actualizado al servidor (doFetchListado),
+            //  • doFetchListado actualiza allOrders + llama populateDetail con los
+            //    datos frescos (incluidos archivos nuevos/eliminados).
+
+            // Actualizar visualmente la fila en la tabla (atributos data-*)
+            const rowEl = document.getElementById('row-' + opIdNum);
+            if (rowEl) {
+                rowEl.setAttribute('data-categoria', updatedFields.categoria);
+                rowEl.setAttribute('data-numero-op', updatedFields.numero_op);
+            }
+
+            // Cerrar modal
+            closeEditOPModal();
+
+            // Refrescar el listado preservando la página actual (no resetear a página 1)
+            // Si lastFilterParams es null (caso extremo: primera carga), usar los params de la URL actual
+            const paramsToUse = lastFilterParams || {
+                search:   (new URL(window.location.href)).searchParams.get('search')   || '',
+                status:   (new URL(window.location.href)).searchParams.get('status')   || 'activas',
+                category: activeCategory,
+                page:     (new URL(window.location.href)).searchParams.get('page')     || 1,
+            };
+            doFetchListado(paramsToUse);
+
+            // Mostrar toast de éxito
+            const toast = document.createElement('div');
+            toast.style.cssText = 'position:fixed;bottom:30px;right:30px;background:rgba(0,242,195,0.15);border:1px solid rgba(0,242,195,0.4);color:#00f2c3;padding:14px 22px;border-radius:10px;font-size:0.95rem;font-weight:600;z-index:99999;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+            toast.textContent = '✅ Orden de producción actualizada correctamente.';
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3500);
+        })
+        .catch(err => {
+            console.error('[Editar OP submit]', err);
+            submitBtn.disabled   = false;
+            submitBtn.textContent = '💾 Guardar Cambios';
+            errorDiv.textContent  = 'Error de conexión. Intente nuevamente.';
+            errorDiv.style.display = 'block';
+        });
+    }
+
+    // Listener para el select "Entregar A" dentro del modal de edición
+    document.addEventListener('change', function(e) {
+        if (e.target && e.target.id === 'edit-entregar-a') {
+            toggleEditInstalacionFields();
+        }
+    });
+
+    // Cerrar modal al hacer clic fuera del contenedor
+    document.getElementById('edit-op-modal').addEventListener('click', function(e) {
+        if (e.target === this) closeEditOPModal();
     });
 </script>
 @endsection
