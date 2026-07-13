@@ -40,8 +40,11 @@ class SolicitudCambioFecha extends Model
 
     public function getSolicitadoPorRolAttribute()
     {
-        $user = \App\Models\UsuarioAcceso::where('codigo', $this->solicitado_por_codigo)->first();
-        return $user ? $user->rol : 'ventas';
+        static $codigoToRol = null;
+        if ($codigoToRol === null) {
+            $codigoToRol = \App\Models\UsuarioAcceso::pluck('rol', 'codigo')->all();
+        }
+        return $codigoToRol[$this->solicitado_por_codigo] ?? 'ventas';
     }
 
     public function ordenProduccion()

@@ -1,0 +1,57 @@
+==========================================================================================
+ROUTE DIAGNOSTIC PROFILE RESULTS
+==========================================================================================
+Route: login (GET /)                                                | Status: 200 | Time:   41.23ms | Queries:   4 | DB Time:    4.47ms | Supabase Storage: 0 | Size:    10428 B | Mem:  2.06 MB
+  -> Slowest Query (   4.10ms): insert into "sessions" ("payload", "last_activity", "user_id", "ip_address", "user_agent", "id") values ('YToxOntzOjY6Il...
+Route: dashboard (GET /op/mis-ordenes as ventas)                    | Status: 200 | Time:   21.43ms | Queries:   7 | DB Time:    0.68ms | Supabase Storage: 0 | Size:    96780 B | Mem:  1.74 MB
+  -> Slowest Query (   0.18ms): select count(*) as aggregate from "orden_produccions" where ("creado_por_codigo" = 'DAFNE-RAMIREZ-PROD-2026' or ("catego...
+Route: Admin Branding (GET /op/admin as admin_branding)             | Status: 200 | Time:   21.55ms | Queries:  16 | DB Time:    1.98ms | Supabase Storage: 0 | Size:   167391 B | Mem:  0.88 MB
+  -> Slowest Query (   0.39ms): select * from "orden_produccions" where ("categoria" = 'Branding' or ("categoria" in ('Reprocesos', 'REPROCESO', 'reproc...
+Route: Admin Promo (GET /op/admin as admin_promo)                   | Status: 200 | Time:   12.98ms | Queries:  16 | DB Time:    1.34ms | Supabase Storage: 0 | Size:   178448 B | Mem:  0.26 MB
+  -> Slowest Query (   0.22ms): update "sessions" set "payload" = 'YTo0OntzOjk6InVzZXJfcm9sZSI7czoxMToiYWRtaW5fcHJvbW8iO3M6OToidXNlcl9jb2RlIjtzOjE2OiJBR...
+Route: Vendedor Panel (GET /op/mis-ordenes as ventas)               | Status: 200 | Time:    5.90ms | Queries:   6 | DB Time:    0.77ms | Supabase Storage: 0 | Size:    96780 B | Mem:  0.14 MB
+  -> Slowest Query (   0.20ms): select count(*) as aggregate from "orden_produccions" where ("creado_por_codigo" = 'DAFNE-RAMIREZ-PROD-2026' or ("catego...
+Route: Jefe Panel (GET /op/jefe-ventas as jefe_ventas)              | Status: 200 | Time:    5.24ms | Queries:   8 | DB Time:    0.62ms | Supabase Storage: 0 | Size:   109285 B | Mem:  0.27 MB
+  -> Slowest Query (   0.13ms): select count(*) as aggregate from "orden_produccions" where (("creado_por_codigo" in (select "codigo" from "usuarios_acc...
+Route: Vista Panel (GET /op/vista as vista)                         | Status: 200 | Time:   11.03ms | Queries:  10 | DB Time:    0.64ms | Supabase Storage: 0 | Size:    66238 B | Mem:  0.17 MB
+  -> Slowest Query (   0.11ms): select * from "orden_produccions" where "estado" in ('Pendiente', 'En proceso', 'En espera') and "orden_produccions"."de...
+Route: listado de OP AJAX (GET /op/admin X-Requested-With as admin) | Status: 200 | Time:   18.01ms | Queries:  17 | DB Time:    1.08ms | Supabase Storage: 0 | Size:   253223 B | Mem:  0.36 MB
+  -> Slowest Query (   0.11ms): update "sessions" set "payload" = 'YTo0OntzOjk6InVzZXJfcm9sZSI7czo1OiJhZG1pbiI7czo5OiJ1c2VyX2NvZGUiO3M6MTU6IkFETUlOLVBST...
+Route: detalle de OP PDF (GET /op/exportar/detalle/{id} as admin)   | Status: 200 | Time:  167.59ms | Queries:   5 | DB Time:    0.40ms | Supabase Storage: 0 | Size:     8945 B | Mem:  6.86 MB
+  -> Slowest Query (   0.11ms): update "sessions" set "payload" = 'YTo0OntzOjk6InVzZXJfcm9sZSI7czo1OiJhZG1pbiI7czo5OiJ1c2VyX2NvZGUiO3M6MTU6IkFETUlOLVBST...
+Route: edición modal GET (GET /op/editar/{id} as admin)            | Status: 422 | Time:    2.63ms | Queries:   5 | DB Time:    0.33ms | Supabase Storage: 0 | Size:      151 B | Mem:  0.08 MB
+  -> Slowest Query (   0.12ms): update "sessions" set "payload" = 'YTo0OntzOjk6InVzZXJfcm9sZSI7czo1OiJhZG1pbiI7czo5OiJ1c2VyX2NvZGUiO3M6MTU6IkFETUlOLVBST...
+Route: guardado POST (POST /op/editar/{id} as admin)                | Status: 500 | Time:    2.31ms | Queries:   3 | DB Time:    0.20ms | Supabase Storage: 0 | Size:    10669 B | Mem:  0.15 MB
+Route: filtros AJAX (GET /op/admin?status=Pendiente&category=Branding as admin) | Status: 200 | Time:   12.54ms | Queries:  15 | DB Time:    1.59ms | Supabase Storage: 0 | Size:   217855 B | Mem:  0.30 MB
+  -> Slowest Query (   0.45ms): select * from "sessions" where "id" = 'dIhNDwh41OYDitoE75lW7UHLBPS4LehxcLmBZlIh' limit 1
+Route: búsqueda AJAX (GET /op/admin?search=OP-2026 as admin)       | Status: 500 | Time:   16.54ms | Queries:   3 | DB Time:    0.29ms | Supabase Storage: 0 | Size:    14272 B | Mem:  0.75 MB
+  -> Slowest Query (   0.11ms): update "sessions" set "payload" = 'YTo0OntzOjk6InVzZXJfcm9sZSI7czo1OiJhZG1pbiI7czo5OiJ1c2VyX2NvZGUiO3M6MTU6IkFETUlOLVBST...
+Route: vistas TV (GET /op/tv?categoria=Branding as tv_branding)     | Status: 200 | Time:   12.34ms | Queries:   5 | DB Time:    0.48ms | Supabase Storage: 0 | Size:    66172 B | Mem:  0.17 MB
+  -> Slowest Query (   0.17ms): select * from "orden_produccions" where ("categoria" = 'Branding' or ("categoria" in ('Reprocesos', 'Reproceso', 'REPROC...
+Route: updates polling admin (GET /op/admin/updates as admin)       | Status: 200 | Time:    8.28ms | Queries:  17 | DB Time:    1.06ms | Supabase Storage: 0 | Size:     7166 B | Mem:  0.09 MB
+  -> Slowest Query (   0.14ms): select * from "orden_produccions" where "estado" in ('Pendiente', 'En proceso', 'En espera') and "orden_produccions"."de...
+Route: updates polling vendedor (GET /op/mis-ordenes/updates as ventas) | Status: 200 | Time:    3.88ms | Queries:   7 | DB Time:    0.96ms | Supabase Storage: 0 | Size:       50 B | Mem:  0.05 MB
+  -> Slowest Query (   0.37ms): select * from "sessions" where "id" = '54Ewv0OEbddhipPjLEWdjjpzrYU2r4314pPbjVQj' limit 1
+Route: updates polling jefe (GET /op/jefe-ventas/updates as jefe_ventas) | Status: 200 | Time:    2.88ms | Queries:   8 | DB Time:    0.63ms | Supabase Storage: 0 | Size:      155 B | Mem:  0.06 MB
+  -> Slowest Query (   0.12ms): update "sessions" set "payload" = 'YTo0OntzOjk6InVzZXJfcm9sZSI7czoxMToiamVmZV92ZW50YXMiO3M6OToidXNlcl9jb2RlIjtzOjE4OiJKR...
+Route: updates polling tv (GET /op/tv/updates?categoria=Branding as tv_branding) | Status: 200 | Time:    4.20ms | Queries:   6 | DB Time:    0.41ms | Supabase Storage: 0 | Size:     4928 B | Mem:  0.06 MB
+  -> Slowest Query (   0.12ms): select * from "orden_produccions" where ("categoria" = 'Branding' or ("categoria" in ('Reprocesos', 'Reproceso', 'REPROC...
+
+==========================================================================================
+TOP 5 SLOWEST ROUTES
+==========================================================================================
+#1: detalle de OP PDF (GET /op/exportar/detalle/{id} as admin)
+    Total Time: 167.59ms | DB Queries: 5 (0.40ms) | Supabase Calls: 0 | Size: 8945 Bytes
+    Slowest SQL: update "sessions" set "payload" = 'YTo0OntzOjk6InVzZXJfcm9sZSI7czo1OiJhZG1pbiI7czo5OiJ1c2VyX2NvZGUiO3M6MTU6IkFETUlOLVBST0QtMjAyNiI7czo5OiJ1c2VyX25hbWUiO3M6MTM6IkFETUlOSVNUUkFET1IiO3M6NjoiX2ZsYXNoIjthOjI6e3M6Mzoib2xkIjthOjA6e31zOjM6Im5ldyI7YTowOnt9fX0=', "last_activity" = 1783960090, "user_id" = '', "ip_address" = '127.0.0.1', "user_agent" = 'Symfony' where "id" = '3NS4uFLReZ9UfIa0M4nwucd0db7LRZLJ049WhWih'
+#2: login (GET /)
+    Total Time: 41.23ms | DB Queries: 4 (4.47ms) | Supabase Calls: 0 | Size: 10428 Bytes
+    Slowest SQL: insert into "sessions" ("payload", "last_activity", "user_id", "ip_address", "user_agent", "id") values ('YToxOntzOjY6Il9mbGFzaCI7YToyOntzOjM6Im9sZCI7YTowOnt9czozOiJuZXciO2E6MDp7fX19', 1783960090, '', '127.0.0.1', 'Symfony', 'ex8tIaeCLwbGprb1JDynwp8IRVbwgC7eesui2zqA')
+#3: Admin Branding (GET /op/admin as admin_branding)
+    Total Time: 21.55ms | DB Queries: 16 (1.98ms) | Supabase Calls: 0 | Size: 167391 Bytes
+    Slowest SQL: select * from "orden_produccions" where ("categoria" = 'Branding' or ("categoria" in ('Reprocesos', 'REPROCESO', 'reproceso') and exists (select * from "orden_produccions" as "laravel_reserved_1" where "laravel_reserved_1"."id" = "orden_produccions"."reproceso_de_id" and "categoria" = 'Branding' and "laravel_reserved_1"."deleted_at" is null))) and "estado" in ('Pendiente', 'En proceso', 'En espera') and "orden_produccions"."deleted_at" is null order by "fecha_entrega" asc, "hora_entrega" asc limit 20 offset 0
+#4: dashboard (GET /op/mis-ordenes as ventas)
+    Total Time: 21.43ms | DB Queries: 7 (0.68ms) | Supabase Calls: 0 | Size: 96780 Bytes
+    Slowest SQL: select count(*) as aggregate from "orden_produccions" where ("creado_por_codigo" = 'DAFNE-RAMIREZ-PROD-2026' or ("categoria" = 'Reprocesos' and exists (select * from "orden_produccions" as "laravel_reserved_0" where "laravel_reserved_0"."id" = "orden_produccions"."reproceso_de_id" and "creado_por_codigo" = 'DAFNE-RAMIREZ-PROD-2026' and "laravel_reserved_0"."deleted_at" is null))) and "estado" in ('Pendiente', 'En proceso', 'En espera') and "orden_produccions"."deleted_at" is null
+#5: listado de OP AJAX (GET /op/admin X-Requested-With as admin)
+    Total Time: 18.01ms | DB Queries: 17 (1.08ms) | Supabase Calls: 0 | Size: 253223 Bytes
+    Slowest SQL: update "sessions" set "payload" = 'YTo0OntzOjk6InVzZXJfcm9sZSI7czo1OiJhZG1pbiI7czo5OiJ1c2VyX2NvZGUiO3M6MTU6IkFETUlOLVBST0QtMjAyNiI7czo5OiJ1c2VyX25hbWUiO3M6MTM6IkFETUlOSVNUUkFET1IiO3M6NjoiX2ZsYXNoIjthOjI6e3M6Mzoib2xkIjthOjA6e31zOjM6Im5ldyI7YTowOnt9fX0=', "last_activity" = 1783960090, "user_id" = '', "ip_address" = '127.0.0.1', "user_agent" = 'Symfony' where "id" = 'JYOXjR9Ka4flcpHhws2tAtHfC5sseBZWbwp46Oxk'

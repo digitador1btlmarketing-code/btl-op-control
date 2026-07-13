@@ -13,23 +13,23 @@
 <!-- KPIs Grid -->
 <div class="grid-5" style="margin-bottom: 25px;">
     <div class="kpi-card">
-        <div id="kpi-total" class="kpi-value">{{ $ordenes->count() }}</div>
+        <div id="kpi-total" class="kpi-value">{{ $kpis['total'] }}</div>
         <div class="kpi-label">Total Órdenes</div>
     </div>
     <div class="kpi-card pending">
-        <div id="kpi-pendientes" class="kpi-value" style="color: var(--state-pendiente);">{{ $ordenes->where('estado', 'Pendiente')->count() }}</div>
+        <div id="kpi-pendientes" class="kpi-value" style="color: var(--state-pendiente);">{{ $kpis['pendientes'] }}</div>
         <div class="kpi-label">Pendientes</div>
     </div>
     <div class="kpi-card process">
-        <div id="kpi-en-proceso" class="kpi-value" style="color: var(--state-en-proceso);">{{ $ordenes->where('estado', 'En proceso')->count() }}</div>
+        <div id="kpi-en-proceso" class="kpi-value" style="color: var(--state-en-proceso);">{{ $kpis['en_proceso'] }}</div>
         <div class="kpi-label">En Proceso</div>
     </div>
     <div class="kpi-card waiting">
-        <div id="kpi-en-espera" class="kpi-value" style="color: var(--state-en-espera);">{{ $ordenes->where('estado', 'En espera')->count() }}</div>
+        <div id="kpi-en-espera" class="kpi-value" style="color: var(--state-en-espera);">{{ $kpis['en_espera'] }}</div>
         <div class="kpi-label">En Espera</div>
     </div>
     <div class="kpi-card finished">
-        <div id="kpi-terminadas" class="kpi-value" style="color: var(--state-terminado);">{{ $ordenes->where('estado', 'Terminado')->count() }}</div>
+        <div id="kpi-terminadas" class="kpi-value" style="color: var(--state-terminado);">{{ $kpis['terminadas'] }}</div>
         <div class="kpi-label">Terminadas</div>
     </div>
 </div>
@@ -644,6 +644,15 @@
 
     // Polling logic for Vista panel (updates lists in background)
     let isPolling = false;
+    let vistaPollTimer = null;
+
+    function scheduleVistaPoll(delay) {
+        clearTimeout(vistaPollTimer);
+        if (!document.hidden) {
+            vistaPollTimer = setTimeout(pollVistaUpdates, delay);
+        }
+    }
+
     function pollVistaUpdates() {
         if (isPolling) return;
         isPolling = true;
@@ -767,14 +776,24 @@
             .catch(err => console.log("AJAX updates polling error (vista):", err))
             .finally(() => {
                 isPolling = false;
+                scheduleVistaPoll(15000);
             });
     }
+
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+            clearTimeout(vistaPollTimer);
+            vistaPollTimer = null;
+        } else {
+            pollVistaUpdates();
+        }
+    });
 
     document.addEventListener('DOMContentLoaded', () => {
         applyVistaFilters();
         
-        // Start polling updates every 15 seconds
-        setInterval(pollVistaUpdates, 15000);
+        // Start polling updates every 15 seconds safely
+        scheduleVistaPoll(15000);
     });
 </script>
 @endsection

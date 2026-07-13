@@ -694,6 +694,15 @@
 
     // Dynamic AJAX updates polling loop (runs every 5 seconds, prevents cache and overlap)
     let isPolling = false;
+    let tvPollTimer = null;
+
+    function scheduleTvPoll(delay) {
+        clearTimeout(tvPollTimer);
+        if (!document.hidden) {
+            tvPollTimer = setTimeout(pollUpdates, delay);
+        }
+    }
+
     function pollUpdates() {
         if (isPolling) return;
         isPolling = true;
@@ -802,8 +811,18 @@
         .finally(() => {
             isPolling = false;
             if (indicator) indicator.style.opacity = '0';
+            scheduleTvPoll(15000);
         });
     }
+
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+            clearTimeout(tvPollTimer);
+            tvPollTimer = null;
+        } else {
+            pollUpdates();
+        }
+    });
 
     // Clock ticking
     function updateClock() {
@@ -835,8 +854,8 @@
             selectOrder(parseInt(savedId));
         }
 
-        // Start polling updates every 15 seconds
-        setInterval(pollUpdates, 15000);
+        // Start polling updates every 15 seconds safely
+        scheduleTvPoll(15000);
     });
 </script>
 @endsection

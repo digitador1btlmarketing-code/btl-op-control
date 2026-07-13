@@ -708,6 +708,20 @@ class OrdenProduccionController extends Controller
             }
         }
 
+        $kpiQuery = $query->clone();
+        $statusCounts = $kpiQuery->select('estado', \Illuminate\Support\Facades\DB::raw('count(*) as total'))
+            ->groupBy('estado')
+            ->pluck('total', 'estado')
+            ->all();
+        $totalCount = array_sum($statusCounts);
+        $kpis = [
+            'total' => $totalCount,
+            'pendientes' => $statusCounts['Pendiente'] ?? 0,
+            'en_proceso' => $statusCounts['En proceso'] ?? 0,
+            'terminadas' => $statusCounts['Terminado'] ?? 0,
+            'en_espera' => $statusCounts['En espera'] ?? 0,
+        ];
+
         $ordenes = $query->orderBy('fecha_entrega', 'asc')
             ->orderBy('hora_entrega', 'asc')
             ->paginate(20)
@@ -719,7 +733,7 @@ class OrdenProduccionController extends Controller
             ->filter(fn($sol) => $this->canApproveOrRejectSolicitud($sol))
             ->values();
 
-        return view('op.mis_ordenes', compact('ordenes', 'solicitudes'));
+        return view('op.mis_ordenes', compact('ordenes', 'solicitudes', 'kpis'));
     }
 
     /**
@@ -765,6 +779,20 @@ class OrdenProduccionController extends Controller
             }
         }
 
+        $kpiQuery = $query->clone();
+        $statusCounts = $kpiQuery->select('estado', \Illuminate\Support\Facades\DB::raw('count(*) as total'))
+            ->groupBy('estado')
+            ->pluck('total', 'estado')
+            ->all();
+        $totalCount = array_sum($statusCounts);
+        $kpis = [
+            'total' => $totalCount,
+            'pendientes' => $statusCounts['Pendiente'] ?? 0,
+            'en_proceso' => $statusCounts['En proceso'] ?? 0,
+            'terminadas' => $statusCounts['Terminado'] ?? 0,
+            'en_espera' => $statusCounts['En espera'] ?? 0,
+        ];
+
         $ordenes = $query->orderBy('fecha_entrega', 'asc')
             ->orderBy('hora_entrega', 'asc')
             ->paginate(20)
@@ -783,6 +811,7 @@ class OrdenProduccionController extends Controller
         return response()->json([
             'ordenes' => $ordenes,
             'solicitudes' => $solicitudes,
+            'kpis' => $kpis,
             'recent_events' => $this->getRecentEvents()
         ]);
     }
@@ -799,25 +828,18 @@ class OrdenProduccionController extends Controller
         $category = $request->input('category', 'todos');
 
         // Filter OPs: created by vendors belonging to this jefe or by the jefe itself
-        $query = OrdenProduccion::with(['archivos', 'reprocesos', 'solicitudesReproceso', 'original', 'parent', 'solicitudPendiente'])->where(function ($query) use ($jefeCodigo) {
-            $query->where(function ($q) use ($jefeCodigo) {
-                $q->whereIn('creado_por_codigo', function ($sub) use ($jefeCodigo) {
-                    $sub->select('codigo')
-                        ->from('usuarios_acceso')
-                        ->where('jefe_codigo', $jefeCodigo);
-                })
-                ->orWhere('creado_por_codigo', $jefeCodigo);
+        $vendedoresCodigos = UsuarioAcceso::where('jefe_codigo', $jefeCodigo)->pluck('codigo')->toArray();
+        $query = OrdenProduccion::with(['archivos', 'reprocesos', 'solicitudesReproceso', 'original', 'parent', 'solicitudPendiente'])->where(function ($query) use ($jefeCodigo, $vendedoresCodigos) {
+            $query->where(function ($q) use ($jefeCodigo, $vendedoresCodigos) {
+                $q->whereIn('creado_por_codigo', $vendedoresCodigos)
+                  ->orWhere('creado_por_codigo', $jefeCodigo);
             })
-            ->orWhere(function ($sub) use ($jefeCodigo) {
+            ->orWhere(function ($sub) use ($jefeCodigo, $vendedoresCodigos) {
                 $sub->where('categoria', 'Reprocesos')
-                    ->whereHas('original', function ($orig) use ($jefeCodigo) {
-                        $orig->where(function ($q) use ($jefeCodigo) {
-                            $q->whereIn('creado_por_codigo', function ($sub2) use ($jefeCodigo) {
-                                $sub2->select('codigo')
-                                    ->from('usuarios_acceso')
-                                    ->where('jefe_codigo', $jefeCodigo);
-                            })
-                            ->orWhere('creado_por_codigo', $jefeCodigo);
+                    ->whereHas('original', function ($orig) use ($jefeCodigo, $vendedoresCodigos) {
+                        $orig->where(function ($q) use ($jefeCodigo, $vendedoresCodigos) {
+                            $q->whereIn('creado_por_codigo', $vendedoresCodigos)
+                              ->orWhere('creado_por_codigo', $jefeCodigo);
                         });
                     });
             });
@@ -899,25 +921,18 @@ class OrdenProduccionController extends Controller
         $status = $request->input('status', 'activas');
         $category = $request->input('category', 'todos');
 
-        $query = OrdenProduccion::with(['archivos', 'reprocesos', 'solicitudesReproceso', 'original', 'parent', 'solicitudPendiente'])->where(function ($query) use ($jefeCodigo) {
-            $query->where(function ($q) use ($jefeCodigo) {
-                $q->whereIn('creado_por_codigo', function ($sub) use ($jefeCodigo) {
-                    $sub->select('codigo')
-                        ->from('usuarios_acceso')
-                        ->where('jefe_codigo', $jefeCodigo);
-                })
-                ->orWhere('creado_por_codigo', $jefeCodigo);
+        $vendedoresCodigos = UsuarioAcceso::where('jefe_codigo', $jefeCodigo)->pluck('codigo')->toArray();
+        $query = OrdenProduccion::with(['archivos', 'reprocesos', 'solicitudesReproceso', 'original', 'parent', 'solicitudPendiente'])->where(function ($query) use ($jefeCodigo, $vendedoresCodigos) {
+            $query->where(function ($q) use ($jefeCodigo, $vendedoresCodigos) {
+                $q->whereIn('creado_por_codigo', $vendedoresCodigos)
+                  ->orWhere('creado_por_codigo', $jefeCodigo);
             })
-            ->orWhere(function ($sub) use ($jefeCodigo) {
+            ->orWhere(function ($sub) use ($jefeCodigo, $vendedoresCodigos) {
                 $sub->where('categoria', 'Reprocesos')
-                    ->whereHas('original', function ($orig) use ($jefeCodigo) {
-                        $orig->where(function ($q) use ($jefeCodigo) {
-                            $q->whereIn('creado_por_codigo', function ($sub2) use ($jefeCodigo) {
-                                $sub2->select('codigo')
-                                    ->from('usuarios_acceso')
-                                    ->where('jefe_codigo', $jefeCodigo);
-                            })
-                            ->orWhere('creado_por_codigo', $jefeCodigo);
+                    ->whereHas('original', function ($orig) use ($jefeCodigo, $vendedoresCodigos) {
+                        $orig->where(function ($q) use ($jefeCodigo, $vendedoresCodigos) {
+                            $q->whereIn('creado_por_codigo', $vendedoresCodigos)
+                              ->orWhere('creado_por_codigo', $jefeCodigo);
                         });
                     });
             });
@@ -1493,13 +1508,10 @@ class OrdenProduccionController extends Controller
         } elseif ($userRole === 'admin_promo') {
             $query->where('categoria', 'Promocional');
         } elseif ($userRole === 'jefe_ventas') {
-            $query->where(function($q) use ($userCode) {
-                $q->whereIn('creado_por_codigo', function($sub) use ($userCode) {
-                    $sub->select('codigo')
-                        ->from('usuarios_acceso')
-                        ->where('jefe_codigo', $userCode);
-                })
-                ->orWhere('creado_por_codigo', $userCode);
+            $vendedoresCodigos = UsuarioAcceso::where('jefe_codigo', $userCode)->pluck('codigo')->toArray();
+            $query->where(function($q) use ($userCode, $vendedoresCodigos) {
+                $q->whereIn('creado_por_codigo', $vendedoresCodigos)
+                  ->orWhere('creado_por_codigo', $userCode);
             });
         }
 
@@ -1602,13 +1614,10 @@ class OrdenProduccionController extends Controller
             } elseif ($userRole === 'admin_promo') {
                 $query->where('categoria', 'Promocional');
             } elseif ($userRole === 'jefe_ventas') {
-                $query->where(function($q) use ($userCode) {
-                    $q->whereIn('creado_por_codigo', function($sub) use ($userCode) {
-                        $sub->select('codigo')
-                            ->from('usuarios_acceso')
-                            ->where('jefe_codigo', $userCode);
-                    })
-                    ->orWhere('creado_por_codigo', $userCode);
+                $vendedoresCodigos = UsuarioAcceso::where('jefe_codigo', $userCode)->pluck('codigo')->toArray();
+                $query->where(function($q) use ($userCode, $vendedoresCodigos) {
+                    $q->whereIn('creado_por_codigo', $vendedoresCodigos)
+                      ->orWhere('creado_por_codigo', $userCode);
                 });
             }
 
@@ -1811,14 +1820,11 @@ class OrdenProduccionController extends Controller
                 $q->where('categoria', 'Promocional');
             });
         } elseif ($userRole === 'jefe_ventas') {
-            $query->whereHas('ordenProduccion', function($q) use ($userCode) {
-                $q->where(function($sub) use ($userCode) {
-                    $sub->whereIn('creado_por_codigo', function($uQuery) use ($userCode) {
-                        $uQuery->select('codigo')
-                            ->from('usuarios_acceso')
-                            ->where('jefe_codigo', $userCode);
-                    })
-                    ->orWhere('creado_por_codigo', $userCode);
+            $vendedoresCodigos = UsuarioAcceso::where('jefe_codigo', $userCode)->pluck('codigo')->toArray();
+            $query->whereHas('ordenProduccion', function($q) use ($userCode, $vendedoresCodigos) {
+                $q->where(function($sub) use ($userCode, $vendedoresCodigos) {
+                    $sub->whereIn('creado_por_codigo', $vendedoresCodigos)
+                        ->orWhere('creado_por_codigo', $userCode);
                 });
             });
         } elseif ($userRole === 'ventas') {

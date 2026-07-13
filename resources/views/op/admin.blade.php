@@ -1792,6 +1792,7 @@
         return tr;
     }
 
+    let isPollingAdmin = false;
     let pollingTimer = null;
     let resumeTimer = null;
     let isUserInteracting = false;
@@ -1799,10 +1800,9 @@
 
     function startPolling() {
         stopPolling();
-        if (!isUserInteracting) {
+        if (!isUserInteracting && !document.hidden) {
             pollingTimer = setTimeout(() => {
                 pollAdminUpdates();
-                startPolling();
             }, POLLING_INTERVAL_MS);
         }
     }
@@ -1829,6 +1829,8 @@
     }
 
     function pollAdminUpdates() {
+        if (isPollingAdmin) return;
+        isPollingAdmin = true;
         const searchVal = document.getElementById('search-op').value.trim();
         const filterVal = document.getElementById('filter-status').value;
         const categoryVal = activeCategory;
@@ -2140,8 +2142,20 @@
                 processRecentEvents(data.recent_events);
             }
         })
-        .catch(err => console.log("AJAX updates polling error:", err));
+        .catch(err => console.log("AJAX updates polling error:", err))
+        .finally(() => {
+            isPollingAdmin = false;
+            startPolling();
+        });
     }
+
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+            stopPolling();
+        } else {
+            pollAdminUpdates();
+        }
+    });
 
     document.addEventListener('DOMContentLoaded', function() {
         // Initial filters run

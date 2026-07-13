@@ -38,7 +38,7 @@
         <div class="kpi-label">En Proceso</div>
     </div>
     <div class="kpi-card waiting">
-        <div id="kpi-en-espera" class="kpi-value" style="color: var(--state-en-espera);">{{ $ordenes->where('estado', 'En espera')->count() }}</div>
+        <div id="kpi-en-espera" class="kpi-value" style="color: var(--state-en-espera);">{{ $kpis['en_espera'] }}</div>
         <div class="kpi-label">En Espera</div>
     </div>
     <div class="kpi-card finished">
@@ -1228,7 +1228,9 @@
 
     function scheduleJefePoll(delay) {
         clearTimeout(jefePollTimer);
-        jefePollTimer = setTimeout(pollJefeUpdates, delay);
+        if (!document.hidden) {
+            jefePollTimer = setTimeout(pollJefeUpdates, delay);
+        }
     }
 
     function pollJefeUpdates() {
@@ -1495,6 +1497,15 @@
             if (jefeErrorBackoff !== 15000) jefeErrorBackoff = 15000;
         });
     }
+
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+            clearTimeout(jefePollTimer);
+            jefePollTimer = null;
+        } else {
+            pollJefeUpdates();
+        }
+    });
 
     document.addEventListener('DOMContentLoaded', () => {
         applyJefeFilters();

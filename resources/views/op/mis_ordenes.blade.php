@@ -16,23 +16,23 @@
 <!-- KPIs Grid -->
 <div class="grid-5" style="margin-bottom: 25px;">
     <div class="kpi-card">
-        <div id="kpi-total" class="kpi-value">{{ $ordenes->count() }}</div>
+        <div id="kpi-total" class="kpi-value">{{ $kpis['total'] }}</div>
         <div class="kpi-label">Mis Órdenes</div>
     </div>
     <div class="kpi-card pending">
-        <div id="kpi-pendientes" class="kpi-value" style="color: var(--state-pendiente);">{{ $ordenes->where('estado', 'Pendiente')->count() }}</div>
+        <div id="kpi-pendientes" class="kpi-value" style="color: var(--state-pendiente);">{{ $kpis['pendientes'] }}</div>
         <div class="kpi-label">Pendientes</div>
     </div>
     <div class="kpi-card process">
-        <div id="kpi-en-proceso" class="kpi-value" style="color: var(--state-en-proceso);">{{ $ordenes->where('estado', 'En proceso')->count() }}</div>
+        <div id="kpi-en-proceso" class="kpi-value" style="color: var(--state-en-proceso);">{{ $kpis['en_proceso'] }}</div>
         <div class="kpi-label">En Proceso</div>
     </div>
     <div class="kpi-card waiting">
-        <div id="kpi-en-espera" class="kpi-value" style="color: var(--state-en-espera);">{{ $ordenes->where('estado', 'En espera')->count() }}</div>
+        <div id="kpi-en-espera" class="kpi-value" style="color: var(--state-en-espera);">{{ $kpis['en_espera'] }}</div>
         <div class="kpi-label">En Espera</div>
     </div>
     <div class="kpi-card finished">
-        <div id="kpi-terminadas" class="kpi-value" style="color: var(--state-terminado);">{{ $ordenes->where('estado', 'Terminado')->count() }}</div>
+        <div id="kpi-terminadas" class="kpi-value" style="color: var(--state-terminado);">{{ $kpis['terminadas'] }}</div>
         <div class="kpi-label">Terminadas</div>
     </div>
 </div>
@@ -1078,7 +1078,9 @@
 
     function scheduleVendedorPoll(delay) {
         clearTimeout(vendedorPollTimer);
-        vendedorPollTimer = setTimeout(pollVendedorUpdates, delay);
+        if (!document.hidden) {
+            vendedorPollTimer = setTimeout(pollVendedorUpdates, delay);
+        }
     }
 
     function pollVendedorUpdates() {
@@ -1099,7 +1101,6 @@
         .then(res => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
         .then(data => {
             const newOrders = data.ordenes;
-            
             // Remove deleted
             const tbody = document.getElementById('vendedor-table-body');
             const rows = tbody.querySelectorAll('.admin-row');
@@ -1110,19 +1111,10 @@
                 }
             });
 
-            // Update KPIs
-            let total = newOrders.length;
-            let pendientes = 0;
-            let proceso = 0;
-            let espera = 0;
-            let terminadas = 0;
+            // Update KPIs from AJAX data
+            const kpis = data.kpis;
 
             newOrders.forEach(orden => {
-                if (orden.estado === 'Pendiente') pendientes++;
-                if (orden.estado === 'En proceso') proceso++;
-                if (orden.estado === 'En espera') espera++;
-                if (orden.estado === 'Terminado') terminadas++;
-
                 let row = document.getElementById('row-' + orden.id);
                 if (!row) {
                     // Create simple row
@@ -1238,11 +1230,11 @@
                 }
             });
 
-            document.getElementById('kpi-total').textContent = total;
-            document.getElementById('kpi-pendientes').textContent = pendientes;
-            document.getElementById('kpi-en-proceso').textContent = proceso;
-            document.getElementById('kpi-en-espera').textContent = espera;
-            document.getElementById('kpi-terminadas').textContent = terminadas;
+            document.getElementById('kpi-total').textContent = kpis.total;
+            document.getElementById('kpi-pendientes').textContent = kpis.pendientes;
+            document.getElementById('kpi-en-proceso').textContent = kpis.en_proceso;
+            document.getElementById('kpi-en-espera').textContent = kpis.en_espera;
+            document.getElementById('kpi-terminadas').textContent = kpis.terminadas;
 
             allOrders = newOrders;
             applyVendedorFilters();
@@ -1332,6 +1324,15 @@
             if (vendedorErrorBackoff !== 15000) vendedorErrorBackoff = 15000;
         });
     }
+ 
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+            clearTimeout(vendedorPollTimer);
+            vendedorPollTimer = null;
+        } else {
+            pollVendedorUpdates();
+        }
+    });
 
     document.addEventListener('DOMContentLoaded', () => {
         // Start polling updates every 15 seconds with in-flight guard
