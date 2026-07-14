@@ -8,7 +8,7 @@ use App\Models\SolicitudCambioFecha;
 use App\Models\HistorialOrden;
 use App\Models\OrdenProduccionArchivo;
 use App\Models\SolicitudReproceso;
-use App\Services\SupabaseStorageService;
+use App\Services\AdjuntoStorageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
@@ -42,7 +42,7 @@ class OrdenProduccionController extends Controller
             'hora_entrega' => 'required',
             'entregar_a' => 'required|in:Cliente,Bodega,Instaladores',
             'brief' => 'nullable|array',
-            'brief.*' => 'file|max:102400',
+            'brief.*' => 'file|max:51200|mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx,txt,zip',
             'detalles' => 'nullable|string',
         ];
 
@@ -68,13 +68,14 @@ class OrdenProduccionController extends Controller
             'lugar_instalacion.required' => 'El lugar de instalación es obligatorio.',
             'fecha_instalacion.required' => 'La fecha de instalación es obligatoria.',
             'hora_instalacion.required' => 'La hora de instalación es obligatoria.',
-            'brief.*.max' => 'El archivo no debe pesar más de 100MB.',
+            'brief.*.max' => 'El archivo no debe pesar más de 50MB.',
+            'brief.*.mimes' => 'El formato del archivo no está permitido. Formatos válidos: PDF, JPG, PNG, DOC/DOCX, XLS/XLSX, TXT y ZIP.',
         ]);
 
         // Manual extension validation to avoid mime type detection errors
         if ($request->hasFile('brief')) {
             $files = $request->file('brief');
-            $allowedExtensions = ['pdf', 'ppt', 'pptx', 'zip', 'jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'ai', 'psd', 'xls', 'xlsx', 'csv', 'doc', 'docx'];
+            $allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'zip'];
             
             foreach ($files as $file) {
                 if ($file) {
@@ -82,7 +83,7 @@ class OrdenProduccionController extends Controller
                     if (!in_array($ext, $allowedExtensions)) {
                         return redirect()->back()
                             ->withInput()
-                            ->withErrors(['brief' => 'El archivo no es válido. Formatos permitidos: PDF, Excel, Word, PowerPoint, ZIP, imágenes, AI, PSD y CSV.']);
+                            ->withErrors(['brief' => 'El archivo no es válido. Formatos permitidos: PDF, JPG, PNG, DOC/DOCX, XLS/XLSX, TXT y ZIP.']);
                     }
                 }
             }
@@ -118,7 +119,7 @@ class OrdenProduccionController extends Controller
                 $filesArray = is_array($briefFiles) ? $briefFiles : [$briefFiles];
                 foreach ($filesArray as $index => $file) {
                     if ($file) {
-                        $uploadResult = SupabaseStorageService::uploadFile($file, $orden->numero_op, 'archivos-iniciales');
+                        $uploadResult = AdjuntoStorageService::uploadFile($file, $orden->id);
                         $uploadedPaths[] = $uploadResult['path'];
                         if ($index === 0) {
                             $firstPath = $uploadResult['path'];
@@ -128,7 +129,6 @@ class OrdenProduccionController extends Controller
                             'file_name'   => $uploadResult['name'],
                             'file_size'   => $uploadResult['size'],
                             'mime_type'   => $uploadResult['mime_type'],
-                            'url'         => $uploadResult['url'],
                             'uploaded_by' => session('user_code') ?: 'SISTEMA',
                         ]);
                     }
@@ -153,7 +153,7 @@ class OrdenProduccionController extends Controller
             // Clean up uploaded files from Storage since DB failed
             foreach ($uploadedPaths as $path) {
                 try {
-                    SupabaseStorageService::deleteFile($path);
+                    AdjuntoStorageService::deleteFile($path);
                 } catch (\Exception $ex) {
                     \Illuminate\Support\Facades\Log::error("Failed to delete orphaned file after DB failure: " . $path);
                 }
@@ -1471,6 +1471,10 @@ class OrdenProduccionController extends Controller
     {
         $orden = OrdenProduccion::findOrFail($id);
 
+        if (!$this->checkUserAuthorization($orden)) {
+            abort(403, 'No tienes permiso para descargar este archivo.');
+        }
+
         if (!$orden->brief) {
             abort(404, 'Esta orden no tiene un brief adjunto.');
         }
@@ -1485,12 +1489,29 @@ class OrdenProduccionController extends Controller
             abort(404, 'Archivo no disponible');
         }
 
-        $signedUrl = SupabaseStorageService::getSignedUrl($filePath);
-        if (!$signedUrl) {
-            abort(404, 'El archivo del brief no existe.');
+        if (!AdjuntoStorageService::exists($filePath)) {
+            abort(404, 'El archivo solicitado no está disponible.');
         }
 
-        return redirect($signedUrl);
+        $stream = AdjuntoStorageService::getStream($filePath);
+        if (!$stream) {
+            abort(404, 'El archivo no se pudo leer.');
+        }
+
+        $fileName = $archivo ? $archivo->file_name : basename($filePath);
+        $mimeType = $archivo ? $archivo->mime_type : $this->getMimeTypeByExtension(pathinfo($filePath, PATHINFO_EXTENSION));
+
+        $disposition = in_array($mimeType, ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp']) ? 'inline' : 'attachment';
+
+        return response()->stream(function () use ($stream) {
+            fpassthru($stream);
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }, 200, [
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => "{$disposition}; filename=\"{$fileName}\"",
+        ]);
     }
 
     /**
@@ -2012,7 +2033,12 @@ class OrdenProduccionController extends Controller
      */
     public function descargarArchivo($id)
     {
-        $archivo  = OrdenProduccionArchivo::findOrFail($id);
+        $archivo = OrdenProduccionArchivo::findOrFail($id);
+        $orden = $archivo->ordenProduccion;
+
+        if (!$orden || !$this->checkUserAuthorization($orden)) {
+            abort(403, 'No tienes permiso para descargar este archivo.');
+        }
 
         if ($archivo->is_missing) {
             abort(404, 'Archivo no disponible');
@@ -2020,12 +2046,71 @@ class OrdenProduccionController extends Controller
 
         $filePath = $archivo->file_path;
 
-        $signedUrl = SupabaseStorageService::getSignedUrl($filePath);
-        if (!$signedUrl) {
-            abort(404, 'El archivo no existe.');
+        if (!AdjuntoStorageService::exists($filePath)) {
+            abort(404, 'El archivo solicitado no está disponible.');
         }
 
-        return redirect($signedUrl);
+        $stream = AdjuntoStorageService::getStream($filePath);
+        if (!$stream) {
+            abort(404, 'El archivo no se pudo leer.');
+        }
+
+        $fileName = $archivo->file_name;
+        $mimeType = $archivo->mime_type ?? $this->getMimeTypeByExtension(pathinfo($filePath, PATHINFO_EXTENSION));
+
+        $disposition = in_array($mimeType, ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp']) ? 'inline' : 'attachment';
+
+        return response()->stream(function () use ($stream) {
+            fpassthru($stream);
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }, 200, [
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => "{$disposition}; filename=\"{$fileName}\"",
+        ]);
+    }
+
+    /**
+     * Download/Stream a specific reproceso attachment by its ID.
+     */
+    public function descargarReproceso($id)
+    {
+        $reproceso = SolicitudReproceso::findOrFail($id);
+        $orden = $reproceso->ordenProduccion;
+
+        if (!$orden || !$this->checkUserAuthorization($orden)) {
+            abort(403, 'No tienes permiso para descargar este archivo.');
+        }
+
+        $filePath = $reproceso->archivo_adjunto;
+        if (empty($filePath)) {
+            abort(404, 'No hay archivo adjunto en esta solicitud.');
+        }
+
+        if (!AdjuntoStorageService::exists($filePath)) {
+            abort(404, 'El archivo solicitado no está disponible.');
+        }
+
+        $stream = AdjuntoStorageService::getStream($filePath);
+        if (!$stream) {
+            abort(404, 'El archivo no se pudo leer.');
+        }
+
+        $fileName = basename($filePath);
+        $mimeType = $reproceso->archivo_mime_type ?? $this->getMimeTypeByExtension(pathinfo($filePath, PATHINFO_EXTENSION));
+
+        $disposition = in_array($mimeType, ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp']) ? 'inline' : 'attachment';
+
+        return response()->stream(function () use ($stream) {
+            fpassthru($stream);
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }, 200, [
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => "{$disposition}; filename=\"{$fileName}\"",
+        ]);
     }
 
     /**
@@ -2056,7 +2141,10 @@ class OrdenProduccionController extends Controller
             'motivo' => 'required|string|in:Error de diseño,Error de producción,Daño en transporte,Solicitud del cliente,Otro',
             'descripcion' => 'required|string|max:2000',
             'fecha_requerida' => 'nullable|date',
-            'archivo' => 'nullable|file|max:102400',
+            'archivo' => 'nullable|file|max:51200|mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx,txt,zip',
+        ], [
+            'archivo.max' => 'El archivo no debe pesar más de 50MB.',
+            'archivo.mimes' => 'El formato del archivo no está permitido. Formatos válidos: PDF, JPG, PNG, DOC/DOCX, XLS/XLSX, TXT y ZIP.',
         ]);
 
         $uploadedPaths = [];
@@ -2065,16 +2153,14 @@ class OrdenProduccionController extends Controller
             $filePath = null;
             $fileSize = null;
             $fileMime = null;
-            $fileUrl = null;
             $uploadedBy = null;
 
             if ($request->hasFile('archivo')) {
-                $uploadResult = SupabaseStorageService::uploadFile($request->file('archivo'), $orden->numero_op, 'avances');
+                $uploadResult = AdjuntoStorageService::uploadFile($request->file('archivo'), $orden->id);
                 $filePath = $uploadResult['path'];
                 $uploadedPaths[] = $filePath;
                 $fileSize = $uploadResult['size'];
                 $fileMime = $uploadResult['mime_type'];
-                $fileUrl = $uploadResult['url'];
                 $uploadedBy = session('user_code') ?: 'SISTEMA';
             }
 
@@ -2086,7 +2172,6 @@ class OrdenProduccionController extends Controller
                 'archivo_adjunto' => $filePath,
                 'archivo_size' => $fileSize,
                 'archivo_mime_type' => $fileMime,
-                'archivo_url' => $fileUrl,
                 'archivo_uploaded_by' => $uploadedBy,
                 'estado' => 'Pendiente',
                 'solicitado_por_codigo' => session('user_code'),
@@ -2108,7 +2193,7 @@ class OrdenProduccionController extends Controller
             // Clean up uploaded file if DB failed
             foreach ($uploadedPaths as $path) {
                 try {
-                    SupabaseStorageService::deleteFile($path);
+                    AdjuntoStorageService::deleteFile($path);
                 } catch (\Exception $ex) {
                     \Illuminate\Support\Facades\Log::error("Failed to delete orphaned file after DB failure: " . $path);
                 }
@@ -2300,6 +2385,44 @@ class OrdenProduccionController extends Controller
             }
             
             // Hard delete
+            // First delete physical files associated with the OP
+            foreach ($op->archivos as $archivo) {
+                try {
+                    AdjuntoStorageService::deleteFile($archivo->file_path);
+                } catch (\Exception $ex) {
+                    \Illuminate\Support\Facades\Log::error("Failed to delete physical file during hard delete: " . $archivo->file_path);
+                }
+            }
+
+            // Also check brief column if it is stored elsewhere and not in archivos relation
+            if ($op->brief) {
+                $isLinked = false;
+                foreach ($op->archivos as $archivo) {
+                    if ($archivo->file_path === $op->brief) {
+                        $isLinked = true;
+                        break;
+                    }
+                }
+                if (!$isLinked) {
+                    try {
+                        AdjuntoStorageService::deleteFile($op->brief);
+                    } catch (\Exception $ex) {
+                        \Illuminate\Support\Facades\Log::error("Failed to delete brief physical file during hard delete: " . $op->brief);
+                    }
+                }
+            }
+
+            // Also check reproceso files
+            foreach ($op->solicitudesReproceso as $reproceso) {
+                if ($reproceso->archivo_adjunto) {
+                    try {
+                        AdjuntoStorageService::deleteFile($reproceso->archivo_adjunto);
+                    } catch (\Exception $ex) {
+                        \Illuminate\Support\Facades\Log::error("Failed to delete reproceso physical file during hard delete: " . $reproceso->archivo_adjunto);
+                    }
+                }
+            }
+
             // First delete related records to avoid foreign key errors in databases like Postgres/Supabase
             $op->archivos()->delete();
             $op->solicitudesCambio()->delete();
@@ -2450,7 +2573,7 @@ class OrdenProduccionController extends Controller
             'entregar_a'   => 'required|in:Cliente,Bodega,Instaladores',
             'detalles'     => 'nullable|string',
             'brief'        => 'nullable|array',
-            'brief.*'      => 'file|max:102400',
+            'brief.*'      => 'file|max:51200|mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx,txt,zip',
             'archivos_eliminar' => 'nullable|array',
             'archivos_eliminar.*' => 'integer',
         ];
@@ -2474,17 +2597,18 @@ class OrdenProduccionController extends Controller
             'lugar_instalacion.required' => 'El lugar de instalación es obligatorio.',
             'fecha_instalacion.required' => 'La fecha de instalación es obligatoria.',
             'hora_instalacion.required'  => 'La hora de instalación es obligatoria.',
-            'brief.*.max'           => 'El archivo no debe pesar más de 100MB.',
+            'brief.*.max'           => 'El archivo no debe pesar más de 50MB.',
+            'brief.*.mimes'         => 'El formato del archivo no está permitido. Formatos válidos: PDF, JPG, PNG, DOC/DOCX, XLS/XLSX, TXT y ZIP.',
         ]);
 
         // Manual extension validation for new files
         if ($request->hasFile('brief')) {
-            $allowedExtensions = ['pdf', 'ppt', 'pptx', 'zip', 'jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'ai', 'psd', 'xls', 'xlsx', 'csv', 'doc', 'docx'];
+            $allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'zip'];
             foreach ($request->file('brief') as $file) {
                 if ($file) {
                     $ext = strtolower($file->getClientOriginalExtension());
                     if (!in_array($ext, $allowedExtensions)) {
-                        $errorMsg = 'El archivo no es válido. Formatos permitidos: PDF, Excel, Word, PowerPoint, ZIP, imágenes, AI, PSD y CSV.';
+                        $errorMsg = 'El archivo no es válido. Formatos permitidos: PDF, JPG, PNG, DOC/DOCX, XLS/XLSX, TXT y ZIP.';
                         if ($request->ajax() || $request->wantsJson()) {
                             return response()->json(['error' => $errorMsg], 422);
                         }
@@ -2538,14 +2662,13 @@ class OrdenProduccionController extends Controller
             if ($nuevosArchivos && is_array($nuevosArchivos)) {
                 foreach ($nuevosArchivos as $file) {
                     if ($file) {
-                        $uploadResult = SupabaseStorageService::uploadFile($file, $orden->numero_op, 'archivos-iniciales');
+                        $uploadResult = AdjuntoStorageService::uploadFile($file, $orden->id);
                         $newUploadedPaths[] = $uploadResult['path'];
                         $orden->archivos()->create([
                             'file_path'   => $uploadResult['path'],
                             'file_name'   => $uploadResult['name'],
                             'file_size'   => $uploadResult['size'],
                             'mime_type'   => $uploadResult['mime_type'],
-                            'url'         => $uploadResult['url'],
                             'uploaded_by' => session('user_code') ?: 'SISTEMA',
                         ]);
                     }
@@ -2570,7 +2693,7 @@ class OrdenProduccionController extends Controller
             // 3. Commit succeeded, safe to delete old files from storage
             foreach ($filesToDeletePaths as $path) {
                 try {
-                    SupabaseStorageService::deleteFile($path);
+                    AdjuntoStorageService::deleteFile($path);
                 } catch (\Exception $ex) {
                     \Illuminate\Support\Facades\Log::error("Failed to delete old file from storage: " . $path);
                 }
@@ -2580,7 +2703,7 @@ class OrdenProduccionController extends Controller
             // Clean up newly uploaded files from Storage since DB failed
             foreach ($newUploadedPaths as $path) {
                 try {
-                    SupabaseStorageService::deleteFile($path);
+                    AdjuntoStorageService::deleteFile($path);
                 } catch (\Exception $ex) {
                     \Illuminate\Support\Facades\Log::error("Failed to delete uploaded file after DB failure: " . $path);
                 }
@@ -2605,6 +2728,72 @@ class OrdenProduccionController extends Controller
             return redirect()->route('op.mis_ordenes')->with('success', 'Orden de producción actualizada correctamente.');
         }
         return redirect()->route('op.admin')->with('success', 'Orden de producción actualizada correctamente.');
+    }
+
+    /**
+     * Check if the current user has access to view/download files for a given production order.
+     */
+    private function checkUserAuthorization(OrdenProduccion $orden): bool
+    {
+        $userRole = session('user_role');
+        $userCode = session('user_code');
+
+        if ($userRole === 'admin') {
+            return true;
+        }
+
+        if ($userRole === 'admin_branding') {
+            return in_array($orden->categoria, ['Branding', 'Reprocesos', 'REPROCESO', 'reproceso']) &&
+                (!$orden->original || $orden->original->categoria === 'Branding');
+        }
+
+        if ($userRole === 'admin_promo') {
+            return in_array($orden->categoria, ['Promocional', 'Reprocesos', 'REPROCESO', 'reproceso']) &&
+                (!$orden->original || $orden->original->categoria === 'Promocional');
+        }
+
+        if ($userRole === 'jefe_ventas') {
+            if ($orden->creado_por_codigo === $userCode) {
+                return true;
+            }
+            // Check if the creator is a seller under this manager
+            return UsuarioAcceso::where('codigo', $orden->creado_por_codigo)
+                ->where('jefe_codigo', $userCode)
+                ->exists();
+        }
+
+        if ($userRole === 'ventas') {
+            return $orden->creado_por_codigo === $userCode;
+        }
+
+        if (in_array($userRole, ['vista', 'tv_branding', 'tv_promocional'])) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Helper to get MIME type by file extension.
+     */
+    private function getMimeTypeByExtension(string $ext): string
+    {
+        $mimes = [
+            'pdf' => 'application/pdf',
+            'png' => 'image/png',
+            'jpg' => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'gif' => 'image/gif',
+            'xls' => 'application/vnd.ms-excel',
+            'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'doc' => 'application/msword',
+            'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'zip' => 'application/zip',
+            'rar' => 'application/x-rar-compressed',
+            'txt' => 'text/plain',
+            'csv' => 'text/csv',
+        ];
+        return $mimes[strtolower($ext)] ?? 'application/octet-stream';
     }
 }
 

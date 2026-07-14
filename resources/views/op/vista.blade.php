@@ -541,7 +541,7 @@
                 if (pendingReproceso) {
                     let attachmentHtml = '';
                     if (pendingReproceso.archivo_adjunto) {
-                        attachmentHtml = `<br><strong>Adjunto:</strong> <a href="/storage/${pendingReproceso.archivo_adjunto}" target="_blank" style="color: var(--blue-bright); text-decoration: underline;">Descargar archivo</a>`;
+                        attachmentHtml = `<br><strong>Adjunto:</strong> <a href="/op/descargar-reproceso/${pendingReproceso.id}" target="_blank" style="color: var(--blue-bright); text-decoration: underline;">Descargar archivo</a>`;
                     }
                     let reqDateStr = 'Sin especificar';
                     if (pendingReproceso.fecha_requerida) {

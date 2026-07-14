@@ -83,6 +83,7 @@ Route::middleware('access:admin,admin_branding,admin_promo,jefe_ventas,ventas,vi
     Route::get('/op/exportar/detalle/{id}', [OrdenProduccionController::class, 'exportarDetallePDF'])->name('op.exportar.detalle');
     Route::get('/op/descargar-brief/{id}', [OrdenProduccionController::class, 'descargarBrief'])->name('op.descargar_brief');
     Route::get('/op/descargar-archivo/{id}', [OrdenProduccionController::class, 'descargarArchivo'])->name('op.descargar_archivo');
+    Route::get('/op/descargar-reproceso/{id}', [OrdenProduccionController::class, 'descargarReproceso'])->name('op.descargar_reproceso');
 });
 
 Route::middleware('access:tv_branding,tv_promocional,admin,admin_branding,admin_promo')->group(function () {

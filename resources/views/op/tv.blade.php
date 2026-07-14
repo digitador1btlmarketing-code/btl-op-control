@@ -186,7 +186,7 @@
                             </td>
                             <td style="text-align: center;" onclick="event.stopPropagation();">
                                 @if($orden->brief)
-                                    <a href="/storage/{{ $orden->brief }}" target="_blank" class="btn-view-brief">Ver Plano</a>
+                                    <a href="{{ route('op.descargar_brief', $orden->id) }}" target="_blank" class="btn-view-brief">Ver Plano</a>
                                 @else
                                     <span style="color: var(--text-muted); font-weight: bold;">-</span>
                                 @endif

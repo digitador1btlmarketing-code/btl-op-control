@@ -6,7 +6,8 @@ use Illuminate\Console\Command;
 use App\Models\OrdenProduccionArchivo;
 use App\Models\SolicitudReproceso;
 use App\Models\OrdenProduccion;
-use App\Services\SupabaseStorageService;
+use App\Services\AdjuntoStorageService;
+use Illuminate\Support\Facades\Storage;
 
 class AuditarStorage extends Command
 {
@@ -18,6 +19,12 @@ class AuditarStorage extends Command
     {
         $this->info("=== INICIANDO AUDITORÍA DE ALMACENAMIENTO ===");
 
+        $bucket = config('filesystems.disks.s3.bucket');
+        if (empty($bucket)) {
+            $this->error("❌ El bucket S3 no está configurado (AWS_BUCKET está vacío en .env).");
+            return Command::FAILURE;
+        }
+
         // --- 1. Auditar de Base de Datos -> Storage ---
         $this->info("\n--- 1. Buscando registros de base de datos sin archivo físico (Missing Files) ---");
         
@@ -27,7 +34,7 @@ class AuditarStorage extends Command
         $ops = OrdenProduccion::whereNotNull('brief')->get();
         foreach ($ops as $op) {
             $path = $op->brief;
-            if (!SupabaseStorageService::exists($path)) {
+            if (!AdjuntoStorageService::exists($path)) {
                 $missingDbFiles[] = [
                     'tipo' => 'Brief de OP',
                     'id' => $op->id,
@@ -41,7 +48,7 @@ class AuditarStorage extends Command
         $archivos = OrdenProduccionArchivo::all();
         foreach ($archivos as $arch) {
             $path = $arch->file_path;
-            if (!SupabaseStorageService::exists($path)) {
+            if (!AdjuntoStorageService::exists($path)) {
                 $missingDbFiles[] = [
                     'tipo' => 'Archivo de OP',
                     'id' => $arch->id,
@@ -55,7 +62,7 @@ class AuditarStorage extends Command
         $reprocesos = SolicitudReproceso::whereNotNull('archivo_adjunto')->get();
         foreach ($reprocesos as $rep) {
             $path = $rep->archivo_adjunto;
-            if (!SupabaseStorageService::exists($path)) {
+            if (!AdjuntoStorageService::exists($path)) {
                 $missingDbFiles[] = [
                     'tipo' => 'Adjunto Reproceso',
                     'id' => $rep->id,
@@ -78,7 +85,8 @@ class AuditarStorage extends Command
         $this->info("\n--- 2. Buscando archivos huérfanos en Supabase Storage (no referenciados en DB) ---");
         
         try {
-            $storageFiles = $this->listAllSupabaseFiles();
+            // Get files recursively using Flysystem S3 adapter
+            $storageFiles = Storage::disk('s3')->allFiles();
             
             $orphans = [];
 
@@ -120,25 +128,5 @@ class AuditarStorage extends Command
         }
 
         return Command::SUCCESS;
-    }
-
-    private function listAllSupabaseFiles($prefix = '')
-    {
-        $objects = SupabaseStorageService::listObjects($prefix);
-        if (!$objects) return [];
-
-        $files = [];
-        foreach ($objects as $obj) {
-            $name = $obj['name'];
-            $path = $prefix ? "{$prefix}/{$name}" : $name;
-            if ($obj['id'] === null) {
-                // It's a folder, traverse it
-                $subFiles = $this->listAllSupabaseFiles($path);
-                $files = array_merge($files, $subFiles);
-            } else {
-                $files[] = $path;
-            }
-        }
-        return $files;
     }
 }

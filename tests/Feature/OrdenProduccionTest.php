@@ -872,7 +872,7 @@ class OrdenProduccionTest extends TestCase
             'user_name' => 'DAFNE',
         ]);
 
-        \Illuminate\Support\Facades\Storage::fake('public');
+        \Illuminate\Support\Facades\Storage::fake('s3');
 
         $file1 = \Illuminate\Http\UploadedFile::fake()->create('document1.pdf', 500);
         $file2 = \Illuminate\Http\UploadedFile::fake()->create('spreadsheet2.xlsx', 800);
@@ -901,11 +901,11 @@ class OrdenProduccionTest extends TestCase
 
         $firstFile = $op->archivos->first();
         $this->assertEquals('document1.pdf', $firstFile->file_name);
-        \Illuminate\Support\Facades\Storage::disk('public')->assertExists($firstFile->file_path);
+        \Illuminate\Support\Facades\Storage::disk('s3')->assertExists($firstFile->file_path);
 
         $secondFile = $op->archivos->last();
         $this->assertEquals('spreadsheet2.xlsx', $secondFile->file_name);
-        \Illuminate\Support\Facades\Storage::disk('public')->assertExists($secondFile->file_path);
+        \Illuminate\Support\Facades\Storage::disk('s3')->assertExists($secondFile->file_path);
     }
 
     /**
@@ -1277,8 +1277,8 @@ class OrdenProduccionTest extends TestCase
             'avance' => 90, // Invalid value
         ]);
 
-        $response->assertStatus(500);
-        $response->assertSee('avance');
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['avance']);
     }
 
     /**
@@ -1472,6 +1472,9 @@ class OrdenProduccionTest extends TestCase
      */
     public function test_supabase_storage_integration(): void
     {
+        // Mock S3
+        \Illuminate\Support\Facades\Storage::fake('s3');
+
         // 1. Authenticate user
         $vendedor = \App\Models\UsuarioAcceso::create([
             'codigo' => 'VEND-02',
@@ -1509,24 +1512,21 @@ class OrdenProduccionTest extends TestCase
         // 4. Verify database entry exists with correct metadata
         $orden = OrdenProduccion::where('numero_op', 'OP-SFT-001')->firstOrFail();
         $this->assertNotNull($orden->brief);
-        $this->assertStringContainsString('OP-SFT-001/archivos-iniciales', $orden->brief);
+        $this->assertStringContainsString('ordenes/' . $orden->id . '/adjuntos/', $orden->brief);
 
         $archivo = \App\Models\OrdenProduccionArchivo::where('orden_produccion_id', $orden->id)->firstOrFail();
         $this->assertEquals('brief_test.pdf', $archivo->file_name);
         $this->assertNotNull($archivo->file_size);
         $this->assertEquals('application/pdf', $archivo->mime_type);
         $this->assertEquals('VEND-02', $archivo->uploaded_by);
-        $this->assertNotNull($archivo->url);
 
-        // 5. Test descargarBrief route redirects
+        // 5. Test descargarBrief route streams correctly
         $responseDescargarBrief = $this->get("/op/descargar-brief/{$orden->id}");
-        $responseDescargarBrief->assertStatus(302); // Redirect
-        $responseDescargarBrief->assertRedirect($archivo->url);
+        $responseDescargarBrief->assertStatus(200);
 
-        // 6. Test descargarArchivo route redirects
+        // 6. Test descargarArchivo route streams correctly
         $responseDescargarArchivo = $this->get("/op/descargar-archivo/{$archivo->id}");
-        $responseDescargarArchivo->assertStatus(302);
-        $responseDescargarArchivo->assertRedirect($archivo->url);
+        $responseDescargarArchivo->assertStatus(200);
 
         // 7. Request a reproceso with file upload
         // Set order to finished first
@@ -1544,11 +1544,10 @@ class OrdenProduccionTest extends TestCase
 
         $solicitud = \App\Models\SolicitudReproceso::where('orden_produccion_id', $orden->id)->firstOrFail();
         $this->assertNotNull($solicitud->archivo_adjunto);
-        $this->assertStringContainsString('OP-SFT-001/avances', $solicitud->archivo_adjunto);
+        $this->assertStringContainsString('ordenes/' . $orden->id . '/adjuntos/', $solicitud->archivo_adjunto);
         $this->assertNotNull($solicitud->archivo_size);
         $this->assertEquals('image/png', $solicitud->archivo_mime_type);
         $this->assertEquals('VEND-02', $solicitud->archivo_uploaded_by);
-        $this->assertNotNull($solicitud->archivo_url);
     }
 
     /**
@@ -1582,6 +1581,7 @@ class OrdenProduccionTest extends TestCase
         ]);
 
         \Illuminate\Support\Facades\Storage::fake('public');
+        \Illuminate\Support\Facades\Storage::fake('s3');
 
         // Create mock local file in faked storage
         $localPath = 'briefs/mock_local_file.pdf';
@@ -1596,7 +1596,7 @@ class OrdenProduccionTest extends TestCase
         $orden->update(['brief' => $localPath]);
 
         // 2. Run with dry-run
-        \Illuminate\Support\Facades\Artisan::call('archivos:migrar-a-supabase', ['--dry-run' => true]);
+        \Illuminate\Support\Facades\Artisan::call('adjuntos:migrar-a-supabase', ['--dry-run' => true]);
         $output = \Illuminate\Support\Facades\Artisan::output();
         $this->assertStringContainsString('Archivos migrados exitosamente: 1', $output);
 
@@ -1605,14 +1605,14 @@ class OrdenProduccionTest extends TestCase
         $this->assertEquals($localPath, $archivo->file_path);
 
         // 3. Run for real
-        $this->artisan('archivos:migrar-a-supabase')
-            ->expectsOutputToContain('=== MIGRACIÓN DE ARCHIVOS A SUPABASE STORAGE ===')
+        $this->artisan('adjuntos:migrar-a-supabase')
+            ->expectsOutputToContain('=== MIGRACIÓN DE ADJUNTOS A SUPABASE STORAGE (S3) ===')
             ->expectsOutputToContain('Archivos migrados exitosamente: 1')
             ->assertExitCode(0);
 
         // Verify updated in DB
         $archivo->refresh();
-        $this->assertStringContainsString('OP-MIG-100/archivos-iniciales', $archivo->file_path);
+        $this->assertStringContainsString('ordenes/' . $orden->id . '/adjuntos/', $archivo->file_path);
         $this->assertNotNull($archivo->file_size);
         $this->assertEquals('application/pdf', $archivo->mime_type);
 
@@ -1641,7 +1641,7 @@ class OrdenProduccionTest extends TestCase
         ]);
 
         // Fake storage to count files
-        \Illuminate\Support\Facades\Storage::fake('public');
+        \Illuminate\Support\Facades\Storage::fake('s3');
 
         $file = \Illuminate\Http\UploadedFile::fake()->create('brief_fail_test.pdf', 500, 'application/pdf');
 
@@ -1670,8 +1670,8 @@ class OrdenProduccionTest extends TestCase
             $this->assertEquals('Forced DB Error', $e->getMessage());
         }
 
-        // Verify that the file was deleted from faked public storage fallback directory
-        $files = \Illuminate\Support\Facades\Storage::disk('public')->allFiles('fallback');
+        // Verify that the file was deleted from faked s3 storage
+        $files = \Illuminate\Support\Facades\Storage::disk('s3')->allFiles();
         $this->assertCount(0, $files);
     }
 }
